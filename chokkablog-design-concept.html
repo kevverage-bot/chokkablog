@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>chokkablog design concept — minimal Swiss + subtle cards</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; padding: 40px 20px; color: #1a1a1a; }
+.wrapper { max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; }
+.subtitle { font-size: 15px; color: #888; margin-bottom: 40px; line-height: 1.5; max-width: 600px; }
+.views { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; }
+.view-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+
+/* Desktop mock */
+.desktop-frame { flex: 1; min-width: 500px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+/* Mobile mock */
+.mobile-frame { width: 375px; flex-shrink: 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+/* Shared nav */
+.nav { padding: 20px 28px; display: flex; justify-content: space-between; align-items: baseline; }
+.logo { font-size: 24px; font-weight: 800; color: #1a1a1a; letter-spacing: -1px; }
+.logo .dot { color: #D85A30; }
+.nav-links { display: flex; gap: 24px; font-size: 13px; color: #999; }
+.nav-links .active { color: #1a1a1a; font-weight: 600; }
+.nav-rule { height: 1px; background: #1a1a1a; margin: 0 28px; }
+
+/* Intro */
+.intro { padding: 28px 28px 20px; }
+.intro-label { font-size: 11px; color: #D85A30; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+.intro-text { font-size: 15px; color: #666; line-height: 1.6; max-width: 480px; }
+
+/* Post grid */
+.post-grid { padding: 0 28px 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.post-card { border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; transition: box-shadow 0.2s; cursor: pointer; }
+.post-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.post-hero { height: 140px; background: #f5f3f0; display: flex; align-items: center; justify-content: center; }
+.post-body { padding: 16px; }
+.post-title { font-size: 15px; font-weight: 700; color: #1a1a1a; line-height: 1.3; letter-spacing: -0.2px; }
+.post-excerpt { font-size: 12px; color: #888; margin-top: 8px; line-height: 1.5; }
+.post-meta { display: flex; gap: 12px; margin-top: 12px; font-size: 11px; color: #bbb; align-items: center; }
+.post-meta .tag { color: #D85A30; }
+
+/* Tools section */
+.tools-section { margin: 0 28px 28px; padding-top: 24px; border-top: 1px solid #1a1a1a; }
+.tools-label { font-size: 11px; color: #D85A30; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }
+.tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.tool-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 18px; transition: box-shadow 0.2s; cursor: pointer; }
+.tool-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tool-name { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+.tool-desc { font-size: 12px; color: #888; margin-top: 5px; line-height: 1.4; }
+.tool-link { font-size: 11px; color: #D85A30; margin-top: 12px; font-weight: 500; }
+
+/* Mobile overrides */
+.mobile-frame .nav { padding: 14px 16px 10px; }
+.mobile-frame .logo { font-size: 20px; }
+.mobile-frame .nav-rule { margin: 0 16px; }
+.mobile-frame .intro { padding: 16px 16px 12px; }
+.mobile-frame .intro-text { font-size: 13px; }
+.mobile-frame .post-grid { padding: 0 16px 16px; grid-template-columns: 1fr; gap: 12px; }
+.mobile-frame .post-hero { height: 100px; }
+.mobile-frame .post-body { padding: 12px; }
+.mobile-frame .post-title { font-size: 14px; }
+.mobile-frame .post-excerpt { font-size: 11px; }
+.mobile-frame .tools-section { margin: 0 16px 16px; }
+.mobile-frame .tools-grid { grid-template-columns: 1fr; gap: 10px; }
+.mobile-frame .tool-card { padding: 12px; }
+.mobile-frame .tool-name { font-size: 13px; }
+
+.hamburger { width: 20px; height: 16px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; }
+.hamburger span { height: 2px; background: #1a1a1a; border-radius: 1px; display: block; }
+
+/* Notes section */
+.notes { margin-top: 48px; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.notes h2 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+.notes p { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 10px; }
+.notes ul { font-size: 14px; color: #555; line-height: 1.6; padding-left: 20px; }
+.notes li { margin-bottom: 6px; }
+.notes strong { color: #1a1a1a; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+<h1>chokkablog design concept</h1>
+<p class="subtitle">Minimal Swiss baseline with subtle bordered cards. Bold typography, coral (#D85A30) accent, generous whitespace. Posts and tools each get light-bordered cards with hero images.</p>
+
+<div class="views">
+
+<!-- ==================== DESKTOP ==================== -->
+<div>
+<div class="view-label">Desktop</div>
+<div class="desktop-frame">
+<div class="nav">
+<div class="logo">chokka<span class="dot">.</span></div>
+<div class="nav-links">
+<span class="active">Writing</span>
+<span>Tools</span>
+<span>Archive</span>
+<span>About</span>
+</div>
+</div>
+<div class="nav-rule"></div>
+
+<div class="intro">
+<div class="intro-label">Data-driven analysis</div>
+<div class="intro-text">Exploring Scotland's economy through data, evidence, and interactive visualisation. By Kevin Hague.</div>
+</div>
+
+<div class="post-grid">
+<div class="post-card">
+<div class="post-hero">
+<svg width="160" height="80" viewBox="0 0 160 90">
+<rect x="10" y="60" width="16" height="22" fill="#D85A30" opacity="0.2"/>
+<rect x="32" y="40" width="16" height="42" fill="#D85A30" opacity="0.35"/>
+<rect x="54" y="50" width="16" height="32" fill="#D85A30" opacity="0.25"/>
+<rect x="76" y="20" width="16" height="62" fill="#D85A30" opacity="0.6"/>
+<rect x="98" y="35" width="16" height="47" fill="#D85A30" opacity="0.4"/>
+<rect x="120" y="10" width="16" height="72" fill="#D85A30"/>
+</svg>
+</div>
+<div class="post-body">
+<div class="post-title">Mind the gap: critiquing the FT's fiscal gap analysis</div>
+<div class="post-excerpt">The FT's headline figure of £1.8k per person seriously understates the true longer-term economic cost of separation.</div>
+<div class="post-meta"><span>5 Apr 2021</span><span class="tag">Fiscal gap</span></div>
+</div>
+</div>
+
+<div class="post-card">
+<div class="post-hero">
+<svg width="80" height="70" viewBox="0 0 80 80">
+<path d="M35 10 C30 15, 28 25, 30 35 C32 42, 28 48, 32 55 C34 60, 30 65, 35 72 C38 72, 42 68, 44 65 C47 60, 50 55, 48 48 C46 42, 50 35, 48 28 C46 20, 42 12, 35 10Z" fill="#D85A30" opacity="0.12" stroke="#D85A30" stroke-width="0.8" stroke-opacity="0.4"/>
+<circle cx="38" cy="30" r="4" fill="#D85A30" opacity="0.4"/>
+<circle cx="36" cy="45" r="3" fill="#D85A30" opacity="0.3"/>
+<circle cx="40" cy="58" r="5" fill="#D85A30" opacity="0.7"/>
+</svg>
+</div>
+<div class="post-body">
+<div class="post-title">Pooling & sharing: how fiscal transfers really work</div>
+<div class="post-excerpt">Decomposing UK regional fiscal balances into their revenue and spending components.</div>
+<div class="post-meta"><span>12 Feb 2020</span><span class="tag">CRA</span></div>
+</div>
+</div>
+
+<div class="post-card">
+<div class="post-hero">
+<svg width="120" height="60" viewBox="0 0 120 60">
+<polyline points="5,48 15,44 25,46 35,38 45,35 55,28 65,22 75,20 85,15 95,10 105,8" fill="none" stroke="#D85A30" stroke-width="1.5" opacity="0.8"/>
+<polyline points="5,46 15,48 25,47 35,45 45,44 55,42 65,40 75,39 85,38 95,36 105,34" fill="none" stroke="#D85A30" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.35"/>
+<circle cx="105" cy="8" r="3" fill="#D85A30" opacity="0.8"/>
+<circle cx="105" cy="34" r="3" fill="#D85A30" opacity="0.35"/>
+</svg>
+</div>
+<div class="post-body">
+<div class="post-title">GERS 2023-24: the headline numbers</div>
+<div class="post-excerpt">Scotland's notional deficit remains significantly above the UK average despite some narrowing.</div>
+<div class="post-meta"><span>22 Aug 2024</span><span class="tag">GERS</span></div>
+</div>
+</div>
+</div>
+
+<div class="tools-section">
+<div class="tools-label">Tools</div>
+<div class="tools-grid">
+<div class="tool-card">
+<div class="tool-name">GERS Explorer</div>
+<div class="tool-desc">Revenue, spending & deficit data across all available years</div>
+<div class="tool-link">Launch →</div>
+</div>
+<div class="tool-card">
+<div class="tool-name">Pooling & Sharing</div>
+<div class="tool-desc">UK regional fiscal transfers mapped and decomposed</div>
+<div class="tool-link">Launch →</div>
+</div>
+<div class="tool-card">
+<div class="tool-name">OECD Benchmarks</div>
+<div class="tool-desc">International comparisons across developed economies</div>
+<div class="tool-link">Launch →</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- ==================== MOBILE ==================== -->
+<div>
+<div class="view-label">Mobile (375px)</div>
+<div class="mobile-frame" style="width: 375px;">
+<div class="nav">
+<div class="logo">chokka<span class="dot">.</span></div>
+<div class="hamburger"><span></span><span></span><span></span></div>
+</div>
+<div class="nav-rule"></div>
+
+<div class="intro">
+<div class="intro-label">Data-driven analysis</div>
+<div class="intro-text">Exploring Scotland's economy through data, evidence, and interactive visualisation. By Kevin Hague.</div>
+</div>
+
+<div class="post-grid">
+<div class="post-card">
+<div class="post-hero">
+<svg width="140" height="60" viewBox="0 0 160 90">
+<rect x="10" y="60" width="16" height="22" fill="#D85A30" opacity="0.2"/>
+<rect x="32" y="40" width="16" height="42" fill="#D85A30" opacity="0.35"/>
+<rect x="54" y="50" width="16" height="32" fill="#D85A30" opacity="0.25"/>
+<rect x="76" y="20" width="16" height="62" fill="#D85A30" opacity="0.6"/>
+<rect x="98" y="35" width="16" height="47" fill="#D85A30" opacity="0.4"/>
+<rect x="120" y="10" width="16" height="72" fill="#D85A30"/>
+</svg>
+</div>
+<div class="post-body">
+<div class="post-title">Mind the gap: critiquing the FT's fiscal gap analysis</div>
+<div class="post-excerpt">The FT's headline figure seriously understates the true cost of separation.</div>
+<div class="post-meta"><span>5 Apr 2021</span><span class="tag">Fiscal gap</span></div>
+</div>
+</div>
+
+<div class="post-card">
+<div class="post-hero" style="height: 80px;">
+<svg width="60" height="55" viewBox="0 0 80 80">
+<path d="M35 10 C30 15, 28 25, 30 35 C32 42, 28 48, 32 55 C34 60, 30 65, 35 72 C38 72, 42 68, 44 65 C47 60, 50 55, 48 48 C46 42, 50 35, 48 28 C46 20, 42 12, 35 10Z" fill="#D85A30" opacity="0.12" stroke="#D85A30" stroke-width="0.8" stroke-opacity="0.4"/>
+<circle cx="40" cy="58" r="5" fill="#D85A30" opacity="0.7"/>
+</svg>
+</div>
+<div class="post-body">
+<div class="post-title">Pooling & sharing: how fiscal transfers really work</div>
+<div class="post-meta"><span>12 Feb 2020</span><span class="tag">CRA</span></div>
+</div>
+</div>
+
+<div class="post-card">
+<div class="post-hero" style="height: 80px;">
+<svg width="100" height="45" viewBox="0 0 120 60">
+<polyline points="5,48 25,38 45,35 65,22 85,15 105,8" fill="none" stroke="#D85A30" stroke-width="1.5" opacity="0.8"/>
+<circle cx="105" cy="8" r="3" fill="#D85A30" opacity="0.8"/>
+</svg>
+</div>
+<div class="post-body">
+<div class="post-title">GERS 2023-24: the headline numbers</div>
+<div class="post-meta"><span>22 Aug 2024</span><span class="tag">GERS</span></div>
+</div>
+</div>
+</div>
+
+<div class="tools-section">
+<div class="tools-label">Tools</div>
+<div class="tools-grid">
+<div class="tool-card">
+<div class="tool-name">GERS Explorer</div>
+<div class="tool-desc">Revenue, spending & deficit</div>
+<div class="tool-link">Launch →</div>
+</div>
+<div class="tool-card">
+<div class="tool-name">Pooling & Sharing</div>
+<div class="tool-desc">UK regional fiscal transfers</div>
+<div class="tool-link">Launch →</div>
+</div>
+<div class="tool-card">
+<div class="tool-name">OECD Benchmarks</div>
+<div class="tool-desc">International comparisons</div>
+<div class="tool-link">Launch →</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<!-- Design notes -->
+<div class="notes">
+<h2>Design notes</h2>
+<p>This is the refined concept combining the minimal Swiss baseline (concept 3) with subtle bordered cards from concept 2.</p>
+<ul>
+<li><strong>Wordmark:</strong> "chokka." — bold sans-serif with coral dot accent</li>
+<li><strong>Accent colour:</strong> coral #D85A30 — used for labels, tags, tool links, and the dot</li>
+<li><strong>Post cards:</strong> light 1px #e8e8e8 border, 8px radius, hero image area + title/excerpt/meta</li>
+<li><strong>Tool cards:</strong> matching border treatment, name/description/launch link</li>
+<li><strong>Typography:</strong> system sans-serif, bold 700 for titles, clean hierarchy</li>
+<li><strong>Layout:</strong> 3-column grid on desktop, single column on mobile</li>
+<li><strong>Navigation:</strong> Writing / Tools / Archive / About</li>
+<li><strong>Hero images:</strong> placeholder chart sketches — in production these would be exhibit screenshots</li>
+<li><strong>Tools section:</strong> separated by a strong black rule, coral "TOOLS" label</li>
+<li><strong>Legacy archive:</strong> separate "Archive" nav item for migrated Blogger content</li>
+</ul>
+</div>
+
+</div>
+</body>
+</html>

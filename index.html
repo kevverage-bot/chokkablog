@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>chokkablog — coming soon</title>
+<meta name="description" content="Data-driven analysis of Scotland's economy. Coming soon.">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #fff;
+  color: #1a1a1a;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav {
+  padding: 20px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.logo {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: -1px;
+}
+.dot { color: #D85A30; }
+.nav-rule {
+  height: 1px;
+  background: #1a1a1a;
+  margin: 0 28px;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 28px;
+  text-align: center;
+}
+
+.coming-soon {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #fff;
+  background: #D85A30;
+  padding: 8px 24px;
+  border-radius: 4px;
+  margin-bottom: 32px;
+}
+
+.tagline {
+  font-size: 18px;
+  color: #666;
+  line-height: 1.6;
+  max-width: 440px;
+  margin-bottom: 40px;
+}
+
+.tools-preview {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.tool-pill {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 14px 20px;
+  text-align: left;
+  min-width: 180px;
+}
+.tool-pill-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.tool-pill-desc {
+  font-size: 11px;
+  color: #888;
+  margin-top: 3px;
+}
+.tool-pill-link {
+  font-size: 10px;
+  color: #D85A30;
+  margin-top: 8px;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+}
+.tool-pill-link:hover {
+  text-decoration: underline;
+}
+
+.footer {
+  padding: 20px 28px;
+  text-align: center;
+  font-size: 12px;
+  color: #ccc;
+}
+
+@media (max-width: 600px) {
+  .nav { padding: 16px 20px; }
+  .nav-rule { margin: 0 20px; }
+  .logo { font-size: 20px; }
+  .main { padding: 40px 20px; }
+  .tagline { font-size: 16px; }
+  .tools-preview { flex-direction: column; align-items: center; }
+  .tool-pill { min-width: 240px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="logo">chokka<span class="dot">.</span></div>
+</nav>
+<div class="nav-rule"></div>
+
+<main class="main">
+  <div class="coming-soon">Coming soon</div>
+  <p class="tagline">Data-driven analysis of Scotland's economy — through writing, evidence, and interactive visualisation. By Kevin Hague.</p>
+
+  <div class="tools-preview">
+    <div class="tool-pill">
+      <div class="tool-pill-name">Pooling & Sharing</div>
+      <div class="tool-pill-desc">UK regional fiscal transfers</div>
+      <a class="tool-pill-link" href="https://cra.kevverage.com" target="_blank">Explore →</a>
+    </div>
+    <div class="tool-pill">
+      <div class="tool-pill-name">GERS Explorer</div>
+      <div class="tool-pill-desc">Revenue, spending & deficit</div>
+      <a class="tool-pill-link" href="https://gers.kevverage.com" target="_blank">Explore →</a>
+    </div>
+    <div class="tool-pill">
+      <div class="tool-pill-name">OECD Benchmarks</div>
+      <div class="tool-pill-desc">International comparisons</div>
+      <a class="tool-pill-link" href="https://oecd.kevverage.com" target="_blank">Explore →</a>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">chokkablog.com</footer>
+
+</body>
+</html>
