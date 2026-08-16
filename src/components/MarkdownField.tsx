@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { RichText } from './RichText'
 import { uploadPostImage } from '../lib/postImage'
+import { extractEmbedUrl, isUsableEmbedUrl } from '../lib/embedUrl'
 
 interface Props {
   value: string
@@ -30,7 +31,9 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
   const [preview, setPreview] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
+  /** A message from the Image or Chart button, shown under the toolbar — next
+   *  to the button that produced it. */
+  const [toolError, setToolError] = useState<string | null>(null)
 
   // Grow the textarea to fit its content, so a long post is all visible rather
   // than scrolling inside a small box; `minHeight` is the floor. Runs after
@@ -144,20 +147,33 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
   }
 
   const insertEmbed = () => {
-    const url = window.prompt(
-      'Chart URL — the embed link from GERS Explorer, the CRA explorer or the OECD benchmarks.',
-      'https://gers-explorer.com/embed/charts/',
+    const pasted = window.prompt(
+      'Paste the embed code or URL for the chart — the Embed button on GERS Explorer '
+      + 'or the CRA explorer copies the whole <iframe> snippet, and that works too.',
+      '',
     )
-    if (url === null) return
-    const trimmed = url.trim()
-    if (!trimmed) return
+    if (pasted === null) return
+    if (!pasted.trim()) return
+
+    // An <iframe …> snippet reduced to its src. Pasting the snippet raw would
+    // store a token whose URL contains spaces and quotes, which cannot match —
+    // the markup would just sit in the post as text.
+    const url = extractEmbedUrl(pasted)
+    if (!isUsableEmbedUrl(url)) {
+      setToolError(
+        'That does not look like an embed URL. Paste the code from a chart\u2019s '
+        + 'Embed button, or the https:// address of the embed page itself.',
+      )
+      return
+    }
+    setToolError(null)
     // 'Chart' is selected, ready to be typed over: it is the iframe's accessible
     // title, so leaving it generic is a real (if quiet) accessibility cost.
-    insertBlock(`@[Chart](${trimmed})`, 2, 5)
+    insertBlock(`@[Chart](${url})`, 2, 5)
   }
 
   const pickImage = () => {
-    setUploadError(null)
+    setToolError(null)
     fileRef.current?.click()
   }
 
@@ -168,14 +184,14 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
     e.target.value = ''
     if (!file) return
     setUploading(true)
-    setUploadError(null)
+    setToolError(null)
     try {
       const { url } = await uploadPostImage(file)
       // Caption first, then alt — see splitImageText. Both start as prompts the
       // author types over, with the caption selected.
       insertBlock(`![Caption|Describe the image](${url})`, 2, 7)
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err))
+      setToolError(err instanceof Error ? err.message : String(err))
     } finally {
       setUploading(false)
     }
@@ -254,13 +270,13 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
         onChange={onFile}
         className="hidden"
       />
-      {uploadError && (
+      {toolError && (
         <div
           className="mb-1 rounded-md border px-3 py-2 text-xs"
           style={{ borderColor: COLORS.negative, background: '#FEF2F2', color: COLORS.negative }}
           role="alert"
         >
-          {uploadError}
+          {toolError}
         </div>
       )}
 
