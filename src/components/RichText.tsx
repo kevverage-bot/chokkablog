@@ -2,6 +2,9 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { COLORS } from '../constants/colors'
 import { emitHighlighted } from '../lib/highlight'
+import { PostImage } from './PostImage'
+import { splitImageText } from '../lib/postImage'
+import { EmbedFrame } from './EmbedFrame'
 
 /**
  * A very small, dependency-free Markdown renderer for the text written in Admin
@@ -28,9 +31,20 @@ import { emitHighlighted } from '../lib/highlight'
  * Plain text is valid Markdown, so text written before any of this existed
  * renders unchanged.
  *
- * Phase 2 adds `![caption|alt](url)` and `@[embed](url)` to INLINE_SRC. Both are
- * new alternatives in the same regex and new branches in renderInline — the
- * property above is what makes that safe, and must survive it.
+ * Pictures and charts:
+ *
+ *   ![alt](url)              a picture. Standard Markdown, and behaves as
+ *                            standard: alt text, no caption.
+ *   ![caption|alt](url)      the same with a visible caption. The visible part
+ *                            comes first, matching ^[anchor|note].
+ *   @[title](url)            an interactive chart from one of the tool sites,
+ *                            embedded in an iframe.
+ *
+ * On a line of its own each becomes a block — a <figure>, or a framed embed —
+ * with the width of the text. A picture written mid-sentence renders as a plain
+ * inline <img> instead, because a <figure> is not valid inside a <p>. An embed
+ * written mid-sentence cannot be an iframe there, so it degrades to an ordinary
+ * link to the chart — which is what a reader wanted from it anyway.
  */
 
 /** One point in a list, with any sub-points hanging off it. The parser only ever
@@ -50,6 +64,10 @@ type Block =
   | { kind: 'ol'; items: ListItem[] }
   /** A pulled-out quotation; one entry per paragraph inside it. */
   | { kind: 'quote'; paras: string[] }
+  /** A picture on a line of its own, with an optional caption below it. */
+  | { kind: 'figure'; url: string; alt: string; caption: string | null }
+  /** An embedded chart on a line of its own. */
+  | { kind: 'embed'; url: string; title: string }
 
 interface Parsed {
   blocks: Block[]
@@ -59,6 +77,12 @@ interface Parsed {
 }
 
 const FOOTNOTE_DEF_RE = /^\[\^([^\]\s]+)\]:\s?(.*)$/
+
+// A picture or an embed alone on a line. Anchored, so one written mid-sentence
+// falls through to the inline handling instead.
+const IMAGE_BLOCK_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/
+const EMBED_BLOCK_RE = /^@\[([^\]]*)\]\(([^)\s]+)\)$/
+
 
 // Source for the inline-token regex. A fresh RegExp is built per render pass
 // because renderInline recurses (a link can contain bold, etc.) and a shared
@@ -83,7 +107,18 @@ const INLINE_SRC =
   // and only these can match at the first of three markers.
   '|\\*\\*\\*([^*]+?)\\*\\*\\*' + // 10: ***bold italic***
   '|(?<![A-Za-z0-9])___([^_]+?)___(?![A-Za-z0-9])' + // 11: ___bold italic___
-  '|<u>([^<]+?)</u>' // 12: <u>underline</u> — see the note at the top
+  '|<u>([^<]+?)</u>' + // 12: <u>underline</u> — see the note at the top
+  // 13 text / 14 url: an inline ![alt](url). Appended rather than inserted so
+  // every group number above keeps its meaning. Position in the alternation does
+  // not decide precedence — the engine tries every alternative at each position
+  // before advancing — so this still wins at the "!" and the link alternative
+  // never gets to match the "[…](…)" behind it and leave a stray "!".
+  '|!\\[([^\\]]*)\\]\\(([^)\\s]+)\\)' +
+  // 15 text / 16 url: an embed written mid-sentence. It cannot become an iframe
+  // there, so it degrades to an ordinary link to the chart — which is what a
+  // reader wants anyway. Without this alternative the link rule matches the
+  // "[…](…)" behind the "@" and leaves the "@" stranded in the prose.
+  '|@\\[([^\\]]*)\\]\\(([^)\\s]+)\\)'
 
 /**
  * Allow only schemes that cannot execute. This is what stops a
@@ -146,6 +181,23 @@ function parse(src: string): Parsed {
       flushPara(); flushList(); flushQuote()
       continue
     }
+    // A picture or an embed alone on a line becomes a block of its own. Checked
+    // before everything else because the trimmed line has to match end to end.
+    const trimmed = line.trim()
+    const imgBlock = trimmed.match(IMAGE_BLOCK_RE)
+    if (imgBlock && isSafeUrl(imgBlock[2])) {
+      flushPara(); flushList(); flushQuote()
+      const { caption, alt } = splitImageText(imgBlock[1])
+      blocks.push({ kind: 'figure', url: imgBlock[2], alt, caption })
+      continue
+    }
+    const embedBlock = trimmed.match(EMBED_BLOCK_RE)
+    if (embedBlock && isSafeUrl(embedBlock[2])) {
+      flushPara(); flushList(); flushQuote()
+      blocks.push({ kind: 'embed', url: embedBlock[2], title: embedBlock[1].trim() || 'Embedded chart' })
+      continue
+    }
+
     // "# " needs the space, so "#1" or "#GERS" stays ordinary text.
     const head = line.match(/^(#{1,3})\s+(.*\S)\s*$/)
     if (head) {
@@ -288,6 +340,29 @@ function renderInline(text: string, ctx: Ctx, keyBase: string): React.ReactNode[
       out.push(<strong key={key}><em>{renderInline(inner, ctx, key)}</em></strong>)
     } else if (m[12] !== undefined) {
       out.push(<u key={key}>{renderInline(m[12], ctx, key)}</u>)
+    } else if (m[15] !== undefined) {
+      const url = m[16]
+      if (isSafeUrl(url)) {
+        out.push(
+          <a
+            key={key}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 font-medium"
+            style={{ color: COLORS.accent }}
+          >
+            {renderInline(m[15], ctx, key)}
+          </a>,
+        )
+      } else out.push(m[0])
+    } else if (m[13] !== undefined) {
+      // Inline, so no <figure> and no caption — see the note at the top.
+      const url = m[14]
+      if (isSafeUrl(url)) {
+        const { alt } = splitImageText(m[13])
+        out.push(<PostImage key={key} url={url} alt={alt} />)
+      } else out.push(m[0])
     } else if (m[9] !== undefined) {
       out.push(
         <code
@@ -587,6 +662,16 @@ export function RichText({ text, id: idProp, hideFootnotes, highlight }: RichTex
                 <p key={j} className="mb-2 last:mb-0">{renderInline(p, ctx, `b${i}-${j}`)}</p>
               ))}
             </blockquote>
+          )
+        }
+        if (b.kind === 'figure') {
+          return <PostImage key={i} url={b.url} alt={b.alt} caption={b.caption} />
+        }
+        if (b.kind === 'embed') {
+          return (
+            <div key={i} className="my-6">
+              <EmbedFrame url={b.url} title={b.title} />
+            </div>
           )
         }
         return <List key={i} items={b.items} ordered={b.kind === 'ol'} ctx={ctx} keyBase={`b${i}`} />

@@ -16,10 +16,21 @@ export function stripMarkdown(md: string): string {
     .replace(/\^\[(?:[^[\]]|\[[^\]]*\])*\]/g, '')
     .replace(/\[\^[^\]]+\]:[^\n]*/g, '')
     .replace(/\[\^[^\]]+\]/g, '')
-    // Links and images → their text. The `!?` also catches the image syntax
-    // arriving in Phase 2, so an alt/caption reads as prose rather than the
-    // whole `![…](…)` landing in a meta description.
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // An embed alone on a line is a chart, not prose — drop it whole, or a meta
+    // description ends up containing the word "Chart" and a URL. One written
+    // mid-sentence renders as a link, so it keeps its text like any other link.
+    .replace(/^[ \t]*@\[[^\]]*\]\([^)]*\)[ \t]*$/gm, '')
+    .replace(/@\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // An image contributes its CAPTION, not its alt: the alt describes the
+    // picture to someone who cannot see it, which reads oddly dropped into the
+    // middle of an excerpt. `caption|alt` keeps the part before the pipe; plain
+    // `![alt](url)` has no caption, so it contributes nothing.
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_m, text: string) => {
+      const pipe = String(text).indexOf('|')
+      return pipe < 0 ? ' ' : ` ${String(text).slice(0, pipe)} `
+    })
+    // Ordinary links → their text.
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     // The one inline tag we allow (underline).
     .replace(/<\/?[a-z][^>]*>/gi, '')
     // Block markers at line starts: headings, quotes, list bullets.

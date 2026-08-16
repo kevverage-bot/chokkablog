@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { RichText } from './RichText'
+import { uploadPostImage } from '../lib/postImage'
 
 interface Props {
   value: string
@@ -27,6 +28,9 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
   // Selection to restore after a toolbar edit re-renders the controlled textarea.
   const pendingSel = useRef<[number, number] | null>(null)
   const [preview, setPreview] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   // Grow the textarea to fit its content, so a long post is all visible rather
   // than scrolling inside a small box; `minHeight` is the floor. Runs after
@@ -124,6 +128,59 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
     }
   }
 
+  /** Put a block on a line of its own. A picture or an embed inside a paragraph
+   *  is not what the author means, and the renderer treats the two differently —
+   *  only a line that is nothing but the token becomes a figure with a caption. */
+  const insertBlock = (snippet: string, selectFrom: number, selectLen: number) => {
+    const ta = taRef.current
+    const at = ta ? ta.selectionStart : value.length
+    const before = value.slice(0, at).replace(/\s*$/, '')
+    const after = value.slice(at).replace(/^\s*/, '')
+    const lead = before ? `${before}\n\n` : ''
+    const next = `${lead}${snippet}${after ? `\n\n${after}` : '\n'}`
+    const pos = lead.length + selectFrom
+    pendingSel.current = [pos, pos + selectLen]
+    onChange(next)
+  }
+
+  const insertEmbed = () => {
+    const url = window.prompt(
+      'Chart URL — the embed link from GERS Explorer, the CRA explorer or the OECD benchmarks.',
+      'https://gers-explorer.com/embed/charts/',
+    )
+    if (url === null) return
+    const trimmed = url.trim()
+    if (!trimmed) return
+    // 'Chart' is selected, ready to be typed over: it is the iframe's accessible
+    // title, so leaving it generic is a real (if quiet) accessibility cost.
+    insertBlock(`@[Chart](${trimmed})`, 2, 5)
+  }
+
+  const pickImage = () => {
+    setUploadError(null)
+    fileRef.current?.click()
+  }
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Cleared immediately so choosing the SAME file again still fires a change
+    // event — otherwise a retry after a failed upload silently does nothing.
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const { url } = await uploadPostImage(file)
+      // Caption first, then alt — see splitImageText. Both start as prompts the
+      // author types over, with the caption selected.
+      insertBlock(`![Caption|Describe the image](${url})`, 2, 7)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-1 mb-1">
@@ -168,6 +225,20 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
         </ToolButton>
         <ToolButton disabled={preview} onClick={insertNote} title="Click-to-reveal note — an inline tooltip">Note</ToolButton>
         <ToolButton
+          disabled={preview || uploading}
+          onClick={pickImage}
+          title="Upload a picture and place it here, on a line of its own"
+        >
+          {uploading ? 'Uploading…' : 'Image'}
+        </ToolButton>
+        <ToolButton
+          disabled={preview}
+          onClick={insertEmbed}
+          title="Embed an interactive chart from one of the tool sites"
+        >
+          Chart
+        </ToolButton>
+        <ToolButton
           className="ml-auto"
           onClick={() => setPreview((p) => !p)}
           title={preview ? 'Back to editing' : 'See it as a reader will'}
@@ -175,6 +246,23 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
           {preview ? 'Edit' : 'Preview'}
         </ToolButton>
       </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+        onChange={onFile}
+        className="hidden"
+      />
+      {uploadError && (
+        <div
+          className="mb-1 rounded-md border px-3 py-2 text-xs"
+          style={{ borderColor: COLORS.negative, background: '#FEF2F2', color: COLORS.negative }}
+          role="alert"
+        >
+          {uploadError}
+        </div>
+      )}
 
       {preview ? (
         <div
