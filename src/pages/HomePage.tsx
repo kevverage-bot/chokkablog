@@ -13,6 +13,16 @@ import { Container } from '../components/Container'
 export function HomePage() {
   return (
     <Container className="py-12 sm:py-16">
+      {/* Stays until there is writing to read. The tools below are live and
+          worth visiting today, so this says "the blog is coming", not "the site
+          is empty" — remove it when /insights has posts on it. */}
+      <span
+        className="inline-block text-[11px] font-semibold uppercase text-white rounded mb-8"
+        style={{ background: COLORS.accent, letterSpacing: '4px', padding: '8px 24px' }}
+      >
+        Coming soon
+      </span>
+
       <p
         className="text-lg sm:text-xl leading-relaxed max-w-lg"
         style={{ color: COLORS.muted }}
