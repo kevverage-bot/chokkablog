@@ -24,6 +24,9 @@ export const COLORS = {
   faint: '#999999',
   /** Card and input borders, and the hairlines between list items. */
   border: '#e8e8e8',
+  /** A flat wash for things set apart from the prose: pulled quotations, inline
+   *  code. Warm rather than blue-grey, so it sits with the coral. */
+  tint: '#F6F4F2',
   /** Row/card hover wash. */
   hoverBg: '#FAFAFA',
   /** Errors, failed saves, and the unpublished-draft outline. */

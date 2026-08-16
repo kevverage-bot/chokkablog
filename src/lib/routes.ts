@@ -10,20 +10,24 @@
  * in App's renderer, and — if it should be found — a route in the prerenderer.
  * Anything less and the page either renders nothing or exists for readers but
  * not for search. Nothing is listed here before its page exists, which is why
- * `insights` and `about` arrive with Phase 1, `search` with Phase 5.
+ * `about` and `search` are still absent.
  */
 
 export type PageId =
   | 'home'
+  | 'insights'
   | 'admin'
   | 'login'
 
 /** The canonical path each page is served at. */
 export const PAGE_PATHS: Record<PageId, string> = {
   home: '/',
+  insights: '/insights',
   admin: '/admin',
   login: '/login',
 }
+
+const INSIGHT_PREFIX = PAGE_PATHS.insights + '/'
 
 /** Longest path first, so a nested route is matched before `/`. */
 const PATH_TO_PAGE: [string, PageId][] = (Object.entries(PAGE_PATHS) as [PageId, string][])
@@ -32,6 +36,8 @@ const PATH_TO_PAGE: [string, PageId][] = (Object.entries(PAGE_PATHS) as [PageId,
 
 export interface RouteState {
   page: PageId
+  /** The post's slug on `/insights/<slug>`, else null. */
+  insightSlug: string | null
   /**
    * True when the path matched nothing. Vercel's catch-all rewrite answers 200
    * for every path (so a post published since the last prerender still works),
@@ -49,8 +55,23 @@ function trimPath(pathname: string): string {
 /** Resolve a pathname to the page it renders. */
 export function parseRoute(pathname: string): RouteState {
   const path = trimPath(pathname)
-  for (const [p, page] of PATH_TO_PAGE) if (p === path) return { page, notFound: false }
-  return { page: 'home', notFound: true }
+  const base: RouteState = { page: 'home', insightSlug: null, notFound: false }
+
+  if (path.startsWith(INSIGHT_PREFIX)) {
+    const slug = path.slice(INSIGHT_PREFIX.length)
+    // A nested segment (`/insights/a/b`) is not a post, so it falls through to
+    // notFound rather than looking one up under a slug that cannot exist.
+    if (slug && !slug.includes('/')) return { ...base, page: 'insights', insightSlug: slug }
+    return { ...base, page: 'insights', notFound: true }
+  }
+
+  for (const [p, page] of PATH_TO_PAGE) if (p === path) return { ...base, page }
+  return { ...base, notFound: true }
+}
+
+/** The permalink for one post. */
+export function pathForInsight(slug: string): string {
+  return INSIGHT_PREFIX + slug
 }
 
 /** The canonical path for a page. */

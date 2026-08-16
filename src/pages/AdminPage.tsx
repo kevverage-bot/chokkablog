@@ -2,14 +2,16 @@ import { COLORS } from '../constants/colors'
 import { TopSection } from '../components/TopSection'
 import { useAuth } from '../hooks/useAuth'
 import { Container } from '../components/Container'
+import { InsightsSection } from '../components/admin/InsightsSection'
 
 /**
  * The admin page: everything editable about the site, in one place.
  *
- * Sections arrive with the phases that need them — Insights (Phase 1), home and
- * about content (once the home page is specified), the feedback and comment
- * inboxes (Phase 4). Each is a `<TopSection>`; the ordering rule inherited from
- * GERS Explorer is that anything with someone waiting in it goes first.
+ * Sections arrive with the phases that need them — home and about content (once
+ * the home page is specified), the feedback and comment inboxes (Phase 4). Each
+ * is a `<TopSection>`; the ordering rule inherited from GERS Explorer is that
+ * anything with someone waiting in it goes first, which is why the inboxes will
+ * land above Insights rather than below it.
  *
  * ⚠ This component renders only for an admin (App checks the role, and /admin
  * will be disallowed in robots.txt), but that is presentation, not security.
@@ -24,10 +26,8 @@ export function AdminPage() {
       <h1 className="text-2xl font-extrabold mb-6" style={{ color: COLORS.ink, letterSpacing: '-0.5px' }}>
         Admin
       </h1>
+      <InsightsSection />
       <AccountSection />
-      <p className="text-sm mt-8" style={{ color: COLORS.muted }}>
-        Insights editing arrives in the next phase.
-      </p>
     </Container>
   )
 }
