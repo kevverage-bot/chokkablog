@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Nothing here is secret — the admin gate and RLS do the actual work. These are
+# simply not pages anyone should arrive at from a search result.
+Disallow: /admin
+Disallow: /login
+# The old holding page, kept so the branch never rendered less than what was
+# live. Reachable, but not a page to be found by.
+Disallow: /coming-soon.html
+
+# Sitemap: added by the prerenderer in Phase 3, generated from the routes that
+# were actually written so it cannot drift from what exists.
