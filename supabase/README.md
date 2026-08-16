@@ -15,8 +15,15 @@ Supabase dashboard → SQL Editor → paste each file → Run, in numerical orde
 
 | File | What it does |
 | --- | --- |
-| `001_functions.sql` | `is_admin()` and `update_updated_at()`. Everything else depends on these. |
-| `002_profiles.sql` | The `profiles` table, the new-account trigger, and the RLS that makes `role` unforgeable. |
+| `001_functions.sql` | `update_updated_at()` — the part with no dependency of its own. |
+| `002_profiles.sql` | The `profiles` table, the new-account trigger, `is_admin()`, and the RLS that makes `role` unforgeable. |
+
+`is_admin()` sits in the second file rather than the first, which looks
+back-to-front until you try it the other way round: its body reads
+`public.profiles`, and Postgres validates a `language sql` body at `CREATE`
+time, so it cannot be created before that table exists. The order *within*
+`002_profiles.sql` is load-bearing for the same reason — table, then rows, then
+the function, then the policies that call it.
 
 ## First-run checklist
 
