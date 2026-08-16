@@ -68,7 +68,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
           className="text-2xl font-extrabold tracking-tight no-underline select-none"
           style={{ color: COLORS.ink, letterSpacing: '-1px' }}
         >
-          chokka<span style={{ color: COLORS.accent }}>.</span>
+          Chokkablog<span style={{ color: COLORS.accent }}>.</span>
         </a>
 
         {/* Desktop sections */}
