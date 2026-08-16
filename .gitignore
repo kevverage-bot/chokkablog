@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+supabase/.env*
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/
+
+# OS
+.DS_Store
+
+# Vercel
+.vercel
+
+# Supabase local temp state
+supabase/.temp/

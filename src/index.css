@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+/* ── Typography ──
+   The system sans-serif stack, per the design concept. No webfont, so no DNS
+   lookup to a second origin, no render-blocking stylesheet, and no FOUT — the
+   first paint is already the final one.
+
+   If a webfont is ever adopted: self-host it under /fonts, preload the one face
+   above the fold, and give any replacement file a NEW name, because immutable
+   caching means overwriting one in place strands returning visitors on the old
+   file for a year. */
+@theme {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  /* Tailwind's preflight leaves the body transparent; painting it explicitly
+     means the prerendered snapshot (Phase 3) renders on white rather than
+     inheriting whatever the browser defaults to. */
+  background: #fff;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular numerals for anything that lines up in a column. The system UI font
+   has lining tabular figures; switch them on explicitly rather than relying on
+   `tabular-nums` alone, which is a no-op in fonts that ship no `tnum`. */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Print: drop the interactive chrome, keep the prose. */
+@media print {
+  button,
+  select,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+}
