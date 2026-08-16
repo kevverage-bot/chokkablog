@@ -65,6 +65,21 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- ─── Backfill accounts that predate the trigger ───
+-- The trigger above only fires on INSERT, so any account created before this
+-- file was first run — including the very first one, made in the dashboard to
+-- bootstrap an admin — has no profile row and therefore no role. That looks
+-- exactly like a broken sign-in: authentication succeeds and the app still shows
+-- you as nobody.
+--
+-- Runs as the table owner (the SQL editor does), so RLS does not apply. Guarded
+-- by ON CONFLICT, so re-running is a no-op and this can never overwrite a role
+-- that has since been set.
+insert into public.profiles (id, email, full_name)
+select u.id, u.email, u.raw_user_meta_data ->> 'full_name'
+  from auth.users as u
+ on conflict (id) do nothing;
+
 -- ─── RLS ───
 alter table public.profiles enable row level security;
 
