@@ -4,6 +4,7 @@ import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
 import { RichText, RichTextFootnotes, InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
+import { PostComments } from '../components/PostComments'
 import { usePosts, type Post } from '../hooks/usePosts'
 import { formatPostDate, isoDate } from '../lib/dates'
 import { pathForPost, pathForPage, plainClick } from '../lib/routes'
@@ -108,6 +109,11 @@ export function PostPage({ slug, onNavigate, onSelect }: {
 
         <RichTextFootnotes text={post.body} id={post.id} highlight={highlight} />
       </article>
+
+      {/* Only on a published post. A draft is visible to its author alone, so a
+          comment box on one could only ever be the author talking to themselves —
+          and the Edge Function refuses a comment on an unpublished post anyway. */}
+      {post.published && <PostComments postId={post.id} />}
 
       {/* Real links between posts: reader flow, and the internal link graph a
           crawler needs to reach every post from any one of them. */}

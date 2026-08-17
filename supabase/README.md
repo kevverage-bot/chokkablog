@@ -20,6 +20,8 @@ Supabase dashboard → SQL Editor → paste each file → Run, in numerical orde
 | `003_insights.sql` | The `insights` table: slugs, the draft gate, and the `published_at` stamp. |
 | `004_post_images.sql` | The public `post-images` storage bucket and its policies. |
 | `005_home.sql` | `home_content` (one row: badge, intro, tools heading) and `tools` — the home page, made editable. Seeds today's wording, so applying it changes nothing a visitor sees. |
+| `006_feedback.sql` | The `feedback` table: the footer form's inbox. No insert policy for anyone — see below. |
+| `007_comments.sql` | The `comments` table, the moderation queue, and `comments_public` — the view that drops the email. |
 
 `is_admin()` sits in the second file rather than the first, which looks
 back-to-front until you try it the other way round: its body reads
@@ -57,10 +59,73 @@ is readable and writable by anyone holding the anon key, which is everyone.
 - Admin-writable tables: `using (public.is_admin())` on insert/update/delete.
 - Publicly readable content with a draft gate: `using (published or public.is_admin())`,
   so an unpublished row is filtered by the database rather than hidden by the UI.
-- Anything the public can *write* (feedback, comments — Phase 4) gets **no** insert
-  policy at all. Those writes go through an Edge Function that verifies a captcha
+- Anything the public can *write* (feedback, comments) gets **no** insert policy at
+  all. Those writes go through an Edge Function that verifies a captcha
   server-side and inserts with the service-role key. RLS cannot see a captcha
   token, so an anon insert policy would let anyone POST straight at the REST
   endpoint and skip the form.
 - Columns that must never be public (a commenter's email) are dropped by a
   **view**, not a policy. RLS filters rows, not columns.
+
+## The public write path
+
+Two Edge Functions, in `functions/`, are the only way a stranger's words reach
+this database: `submit-feedback` (the footer form) and `submit-comment` (beneath a
+post). They share `functions/_shared/guard.ts` — honeypot → time-on-form →
+captcha → rate limit, in that order, so a script that cannot pass the captcha
+never costs a query.
+
+**Both fail closed.** With no `HCAPTCHA_SECRET` set, the guard refuses every
+write with a 503, because an unprotected public insert is the worse failure. The
+app matches that: with no `VITE_HCAPTCHA_SITE_KEY` it does not render the forms at
+all rather than throwing away what somebody typed into one
+(`src/lib/captcha.ts`). **So until hCaptcha is configured, there are no forms on
+the site** — which is the intended state, not a bug.
+
+### Turning it on
+
+1. Create a site at [hcaptcha.com](https://dashboard.hcaptcha.com) for
+   `chokkablog.com`. It gives you a **site key** (public) and a **secret**.
+2. Site key → `VITE_HCAPTCHA_SITE_KEY`, in `.env.local` **and** in Vercel's
+   project env vars (it is compiled into the bundle, so a deploy is needed).
+   Supabase Auth → Attack Protection can take the same key, which is what makes
+   the sign-in form require a captcha too.
+3. Secret and the mail settings → function secrets:
+
+   ```bash
+   npx supabase link --project-ref <ref>          # once
+   npx supabase secrets set HCAPTCHA_SECRET=ES_… \
+                            RESEND_API_KEY=re_… \
+                            FEEDBACK_TO_EMAIL=you@example.com
+   ```
+
+   `RESEND_API_KEY` / `FEEDBACK_TO_EMAIL` are optional: without them a submission
+   is still stored, it just does not email you. Optional too:
+   `FEEDBACK_FROM_EMAIL`, `FEEDBACK_ADMIN_URL`, `FEEDBACK_IP_SALT` (which
+   defaults to the service-role key).
+4. Deploy them:
+
+   ```bash
+   npx supabase functions deploy submit-feedback
+   npx supabase functions deploy submit-comment
+   ```
+
+   `_shared/` is bundled into each automatically. **A change to `guard.ts` needs
+   both redeployed** — that is the one thing about sharing a file this way that
+   will catch you out.
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the platform; do
+not set them, and never put the service-role key in this repo or in any `VITE_`
+variable.
+
+### Checking it works
+
+```sql
+-- Nothing may be insertable by the anon role, in either table.
+select grantee, privilege_type from information_schema.role_table_grants
+ where table_name in ('feedback','comments') and grantee = 'anon';   -- expect: no rows
+
+-- The public view must not expose an address.
+select column_name from information_schema.columns
+ where table_name = 'comments_public';        -- expect: no 'email'
+```

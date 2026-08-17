@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  SITE, HOME_TITLE, STATIC_PAGE_TITLES, plainTitle, postTitle,
+  SITE, HOME_TITLE, AUTHOR, STATIC_PAGE_TITLES, plainTitle, postTitle,
 } from '../lib/pageTitle'
 import { postExcerpt } from '../lib/postExcerpt'
 import * as build from '../../scripts/lib/seo.mjs'
@@ -40,6 +40,13 @@ describe('the prerenderer and the app name pages identically', () => {
 
   it('agrees on the blog hub title', () => {
     expect(build.BLOG_TITLE).toBe(STATIC_PAGE_TITLES.blog)
+  })
+
+  it('agrees on who writes here', () => {
+    // The app signs an author's reply to a comment with this name; the
+    // prerenderer publishes it as the Article's author. A reply signed with one
+    // name while the structured data claims another reads as a fake.
+    expect(build.AUTHOR).toBe(AUTHOR)
   })
 
   for (const [headline, short] of HEADLINES) {

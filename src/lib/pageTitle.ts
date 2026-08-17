@@ -26,6 +26,16 @@ export const SITE = 'chokkablog'
 export const HOME_TITLE = `${SITE} — data-driven analysis of Scotland's economy`
 
 /**
+ * Who writes here.
+ *
+ * Used as the byline on an author's reply to a comment, and by the prerenderer as
+ * an Article's `author` in JSON-LD. Twin of AUTHOR in scripts/lib/seo.mjs: a
+ * reply signed with one name while the structured data claims another is a small
+ * thing that reads as a fake.
+ */
+export const AUTHOR = 'Kevin Hague'
+
+/**
  * Titles this module can produce with no loaded data.
  *
  * Deliberately incomplete. A page whose title depends on content that arrives

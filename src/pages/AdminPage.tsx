@@ -4,19 +4,21 @@ import { useAuth } from '../hooks/useAuth'
 import { Container } from '../components/Container'
 import { PostsSection } from '../components/admin/PostsSection'
 import { HomeSection } from '../components/admin/HomeSection'
+import { CommentsSection } from '../components/admin/CommentsSection'
+import { FeedbackSection } from '../components/admin/FeedbackSection'
 
 /**
  * The admin page: everything editable about the site, in one place.
  *
- * Sections arrive with the phases that need them — about content, the feedback
- * and comment inboxes (Phase 4). Each is a `<TopSection>`; the ordering rule
- * inherited from GERS Explorer is that anything with someone waiting in it goes
- * first, which is why the inboxes will land above the blog rather than below
- * it. The blog is the daily work and Home is edited a few times a year, so they
- * sit in that order.
+ * Each section is a `<TopSection>`, and the ordering rule inherited from GERS
+ * Explorer is that anything with SOMEBODY WAITING IN IT goes first — hence the
+ * two inboxes at the top, each opening itself only when it is not empty. An
+ * unread comment is a reader waiting in public; a draft is not waiting for
+ * anyone. Below them the blog, which is the daily work, then Home, which is
+ * edited a few times a year.
  *
  * ⚠ This component renders only for an admin (App checks the role, and /admin
- * will be disallowed in robots.txt), but that is presentation, not security.
+ * is disallowed in robots.txt), but that is presentation, not security.
  * Every table this page writes to is protected by RLS calling
  * `public.is_admin()` — see supabase/001_profiles.sql. The gate decides what is
  * *shown*; the database decides what is *saved*, and only the second is
@@ -28,6 +30,8 @@ export function AdminPage() {
       <h1 className="text-2xl font-extrabold mb-6" style={{ color: COLORS.ink, letterSpacing: '-0.5px' }}>
         Admin
       </h1>
+      <CommentsSection />
+      <FeedbackSection />
       <PostsSection />
       <HomeSection />
       <AccountSection />
