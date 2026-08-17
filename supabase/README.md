@@ -17,6 +17,9 @@ Supabase dashboard → SQL Editor → paste each file → Run, in numerical orde
 | --- | --- |
 | `001_functions.sql` | `update_updated_at()` — the part with no dependency of its own. |
 | `002_profiles.sql` | The `profiles` table, the new-account trigger, `is_admin()`, and the RLS that makes `role` unforgeable. |
+| `003_insights.sql` | The `insights` table: slugs, the draft gate, and the `published_at` stamp. |
+| `004_post_images.sql` | The public `post-images` storage bucket and its policies. |
+| `005_home.sql` | `home_content` (one row: badge, intro, tools heading) and `tools` — the home page, made editable. Seeds today's wording, so applying it changes nothing a visitor sees. |
 
 `is_admin()` sits in the second file rather than the first, which looks
 back-to-front until you try it the other way round: its body reads

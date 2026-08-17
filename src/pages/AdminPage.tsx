@@ -3,15 +3,17 @@ import { TopSection } from '../components/TopSection'
 import { useAuth } from '../hooks/useAuth'
 import { Container } from '../components/Container'
 import { InsightsSection } from '../components/admin/InsightsSection'
+import { HomeSection } from '../components/admin/HomeSection'
 
 /**
  * The admin page: everything editable about the site, in one place.
  *
- * Sections arrive with the phases that need them — home and about content (once
- * the home page is specified), the feedback and comment inboxes (Phase 4). Each
- * is a `<TopSection>`; the ordering rule inherited from GERS Explorer is that
- * anything with someone waiting in it goes first, which is why the inboxes will
- * land above Insights rather than below it.
+ * Sections arrive with the phases that need them — about content, the feedback
+ * and comment inboxes (Phase 4). Each is a `<TopSection>`; the ordering rule
+ * inherited from GERS Explorer is that anything with someone waiting in it goes
+ * first, which is why the inboxes will land above Insights rather than below
+ * it. Insights is the daily work and Home is edited a few times a year, so they
+ * sit in that order.
  *
  * ⚠ This component renders only for an admin (App checks the role, and /admin
  * will be disallowed in robots.txt), but that is presentation, not security.
@@ -27,6 +29,7 @@ export function AdminPage() {
         Admin
       </h1>
       <InsightsSection />
+      <HomeSection />
       <AccountSection />
     </Container>
   )
