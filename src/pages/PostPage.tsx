@@ -4,25 +4,25 @@ import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
 import { RichText, RichTextFootnotes, InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
-import { useInsights, type Insight } from '../hooks/useInsights'
+import { usePosts, type Post } from '../hooks/usePosts'
 import { formatPostDate, isoDate } from '../lib/dates'
-import { pathForInsight, pathForPage, plainClick } from '../lib/routes'
-import { insightTitle, useDocumentTitle } from '../lib/pageTitle'
+import { pathForPost, pathForPage, plainClick } from '../lib/routes'
+import { postTitle, useDocumentTitle } from '../lib/pageTitle'
 import { tokenize } from '../lib/search'
 
 /**
- * One post at its own URL (/insights/<slug>).
+ * One post at its own URL (/posts/<slug>).
  *
  * The hub shows only a headline and an excerpt, so this is the only place a
  * post's full text is rendered — no two URLs carry the same prose, and each
  * permalink owns its content outright.
  */
-export function InsightPage({ slug, onNavigate, onSelect }: {
+export function PostPage({ slug, onNavigate, onSelect }: {
   slug: string
-  onNavigate: (page: 'insights') => void
+  onNavigate: (page: 'blog') => void
   onSelect: (slug: string) => void
 }) {
-  const { insights, loading } = useInsights()
+  const { posts, loading } = usePosts()
 
   // One-shot search term: arriving from a search result (Phase 5), the words
   // that matched are highlighted so it is obvious why this page came back. Read
@@ -34,17 +34,17 @@ export function InsightPage({ slug, onNavigate, onSelect }: {
     return t.length > 0 ? t : undefined
   }, [])
 
-  const idx = insights.findIndex((i) => i.slug === slug)
-  const post = idx >= 0 ? insights[idx] : undefined
+  const idx = posts.findIndex((i) => i.slug === slug)
+  const post = idx >= 0 ? posts[idx] : undefined
   // The list is newest-first, so the NEXT index is the older post.
-  const newer = idx > 0 ? insights[idx - 1] : null
-  const older = idx >= 0 && idx < insights.length - 1 ? insights[idx + 1] : null
+  const newer = idx > 0 ? posts[idx - 1] : null
+  const older = idx >= 0 && idx < posts.length - 1 ? posts[idx + 1] : null
 
   useEffect(() => { window.scrollTo({ top: 0 }) }, [slug])
 
   // Null until the post is found: on a cold load the prerendered title is
   // already this exact string, so writing anything interim would flick the tab.
-  useDocumentTitle(post ? insightTitle(post.headline, post.short_title) : null)
+  useDocumentTitle(post ? postTitle(post.headline, post.short_title) : null)
 
   if (loading) return <PageLoading />
 
@@ -59,12 +59,12 @@ export function InsightPage({ slug, onNavigate, onSelect }: {
     <Container className="py-10 sm:py-14">
       <nav className="text-sm mb-6">
         <a
-          href={pathForPage('insights')}
-          onClick={(e) => { if (plainClick(e)) { e.preventDefault(); onNavigate('insights') } }}
+          href={pathForPage('blog')}
+          onClick={(e) => { if (plainClick(e)) { e.preventDefault(); onNavigate('blog') } }}
           className="no-underline hover:underline"
           style={{ color: COLORS.accent }}
         >
-          &larr; Insights
+          &larr; Blog
         </a>
       </nav>
 
@@ -124,7 +124,7 @@ export function InsightPage({ slug, onNavigate, onSelect }: {
 function ShareButton({ slug }: { slug: string | null }) {
   const [copied, setCopied] = useState(false)
   const share = async () => {
-    const url = slug ? `${window.location.origin}${pathForInsight(slug)}` : window.location.href
+    const url = slug ? `${window.location.origin}${pathForPost(slug)}` : window.location.href
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
@@ -145,7 +145,7 @@ function ShareButton({ slug }: { slug: string | null }) {
 }
 
 function Adjacent({ post, direction, onSelect }: {
-  post: Insight | null
+  post: Post | null
   direction: 'older' | 'newer'
   onSelect: (slug: string) => void
 }) {
@@ -154,7 +154,7 @@ function Adjacent({ post, direction, onSelect }: {
   const slug = post.slug
   return (
     <a
-      href={pathForInsight(slug)}
+      href={pathForPost(slug)}
       onClick={(e) => { if (plainClick(e)) { e.preventDefault(); onSelect(slug) } }}
       className={`flex-1 rounded-lg border px-4 py-3 no-underline transition-colors hover:bg-gray-50 ${isNewer ? 'text-right' : ''}`}
       style={{ borderColor: COLORS.border }}
@@ -169,7 +169,7 @@ function Adjacent({ post, direction, onSelect }: {
   )
 }
 
-function NotFound({ onNavigate }: { onNavigate: (page: 'insights') => void }) {
+function NotFound({ onNavigate }: { onNavigate: (page: 'blog') => void }) {
   // Same reasoning as NotFoundPage: the server answers 200 for every path, so
   // without this a stale or mistyped post URL becomes an indexable near-duplicate.
   useEffect(() => {
@@ -187,8 +187,8 @@ function NotFound({ onNavigate }: { onNavigate: (page: 'insights') => void }) {
         This post may have been renamed, or isn&rsquo;t published yet.
       </p>
       <a
-        href={pathForPage('insights')}
-        onClick={(e) => { if (plainClick(e)) { e.preventDefault(); onNavigate('insights') } }}
+        href={pathForPage('blog')}
+        onClick={(e) => { if (plainClick(e)) { e.preventDefault(); onNavigate('blog') } }}
         className="text-sm font-semibold no-underline hover:underline"
         style={{ color: COLORS.accent }}
       >

@@ -4,10 +4,10 @@ import { PageLoading } from '../components/PageLoading'
 import { InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
 import { PREVIEW_OUTLINE } from '../constants/colors'
-import { useInsights, type Insight } from '../hooks/useInsights'
-import { insightExcerpt } from '../lib/insightExcerpt'
+import { usePosts, type Post } from '../hooks/usePosts'
+import { postExcerpt } from '../lib/postExcerpt'
 import { formatPostDate, isoDate } from '../lib/dates'
-import { pathForInsight, plainClick } from '../lib/routes'
+import { pathForPost, plainClick } from '../lib/routes'
 
 /**
  * The hub: every post, newest first.
@@ -20,8 +20,8 @@ import { pathForInsight, plainClick } from '../lib/routes'
  * Drafts appear for an admin only, outlined and badged, because RLS returns them
  * to no one else. They sort to the top, which is where the author is working.
  */
-export function InsightsPage({ onSelect }: { onSelect: (slug: string) => void }) {
-  const { insights, loading } = useInsights()
+export function BlogPage({ onSelect }: { onSelect: (slug: string) => void }) {
+  const { posts, loading } = usePosts()
 
   if (loading) return <PageLoading />
 
@@ -31,33 +31,33 @@ export function InsightsPage({ onSelect }: { onSelect: (slug: string) => void })
         className="text-3xl sm:text-4xl font-extrabold mb-2"
         style={{ color: COLORS.ink, letterSpacing: '-1px' }}
       >
-        Insights
+        Blog
       </h1>
       <p className="text-base mb-10 max-w-xl" style={{ color: COLORS.muted }}>
         Analysis of Scotland&rsquo;s economy, and of the arguments made about it.
       </p>
 
-      {insights.length === 0 ? (
+      {posts.length === 0 ? (
         <p className="text-sm" style={{ color: COLORS.faint }}>
           Nothing published yet.
         </p>
       ) : (
         <div className="space-y-8">
-          {insights.map((post) => <PostCard key={post.id} post={post} onSelect={onSelect} />)}
+          {posts.map((post) => <PostCard key={post.id} post={post} onSelect={onSelect} />)}
         </div>
       )}
     </Container>
   )
 }
 
-function PostCard({ post, onSelect }: { post: Insight; onSelect: (slug: string) => void }) {
-  const excerpt = insightExcerpt(post)
+function PostCard({ post, onSelect }: { post: Post; onSelect: (slug: string) => void }) {
+  const excerpt = postExcerpt(post)
   const date = formatPostDate(post.published_at)
   const draft = !post.published
 
   // A draft with no slug has no page to link to yet. Render it as plain text
   // rather than a link that would 404 on the author's own hub.
-  const href = post.slug ? pathForInsight(post.slug) : null
+  const href = post.slug ? pathForPost(post.slug) : null
 
   const heading = (
     <span className="text-xl sm:text-2xl font-bold leading-snug" style={{ color: COLORS.ink, letterSpacing: '-0.4px' }}>

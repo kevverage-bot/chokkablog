@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-/** One post. Mirrors public.insights — see supabase/003_insights.sql. */
-export interface Insight {
+/**
+ * One post. Mirrors public.insights — see supabase/003_insights.sql.
+ *
+ * ⚠ THE TABLE IS STILL CALLED `insights`. The section was renamed to Blog in
+ * August 2026 and the app's vocabulary followed; the table did not, because
+ * renaming it changes nothing a reader can see and every constraint name,
+ * policy and index in 003 would have to move with it. This file and the
+ * prerenderer are the only two places the old name is written down — if you are
+ * grepping for `posts` in supabase/, that is why you found nothing.
+ */
+export interface Post {
   id: string
-  /** This post's URL segment (/insights/<slug>). Null only on a draft that has
+  /** This post's URL segment (/blog/<slug>). Null only on a draft that has
    *  not been given an address yet; the database refuses to publish without one.
    *  ⚠ Frozen once public — changing it breaks every existing link. */
   slug: string | null
@@ -13,7 +22,7 @@ export interface Insight {
    *  Empty falls back to the headline. */
   short_title: string
   /** Hub excerpt and meta description. Blank falls back to an auto-excerpt of
-   *  the body — see lib/insightExcerpt. */
+   *  the body — see lib/postExcerpt. */
   summary: string
   /** The post, as Markdown in the subset RichText renders. */
   body: string
@@ -28,8 +37,8 @@ export interface Insight {
   updated_at: string
 }
 
-export type InsightDraft = Pick<
-  Insight,
+export type PostDraft = Pick<
+  Post,
   'slug' | 'headline' | 'short_title' | 'summary' | 'body' | 'footer' | 'published'
 > & {
   /** Set only to backdate a post; leave undefined and the database stamps it. */
@@ -43,7 +52,7 @@ const ORDER = { column: 'published_at', ascending: false, nullsFirst: true } as 
 
 /** The one query the site makes for posts. Shared by the initial load and by
  *  the refresh after a mutation, so the two can never drift apart in ordering. */
-async function fetchInsights() {
+async function fetchPosts() {
   return supabase
     .from('insights')
     .select('*')
@@ -59,8 +68,8 @@ async function fetchInsights() {
  * the admin list, and there is no filtering here that could disagree with the
  * database about what is public.
  */
-export function useInsights() {
-  const [insights, setInsights] = useState<Insight[]>([])
+export function usePosts() {
+  const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,14 +79,14 @@ export function useInsights() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const { data, error } = await fetchInsights()
+      const { data, error } = await fetchPosts()
       if (cancelled) return
       if (error) {
-        console.error('Failed to load insights:', error.message)
+        console.error('Failed to load posts:', error.message)
         setError(error.message)
       } else {
         setError(null)
-        setInsights((data ?? []) as Insight[])
+        setPosts((data ?? []) as Post[])
       }
       setLoading(false)
     }
@@ -88,13 +97,13 @@ export function useInsights() {
   /** Re-read after a write. Unguarded on purpose: it only runs in response to a
    *  save the author just made, so the component is on screen by definition. */
   const refresh = useCallback(async () => {
-    const { data, error } = await fetchInsights()
+    const { data, error } = await fetchPosts()
     if (error) {
-      console.error('Failed to load insights:', error.message)
+      console.error('Failed to load posts:', error.message)
       setError(error.message)
     } else {
       setError(null)
-      setInsights((data ?? []) as Insight[])
+      setPosts((data ?? []) as Post[])
     }
     setLoading(false)
   }, [])
@@ -102,14 +111,14 @@ export function useInsights() {
   /** Each mutation returns null on success, or a message to show the author.
    *  The editor keeps their text on screen when one fails, so the message has to
    *  come back rather than only reaching the console. */
-  const create = useCallback(async (draft: InsightDraft): Promise<string | null> => {
+  const create = useCallback(async (draft: PostDraft): Promise<string | null> => {
     const { error } = await supabase.from('insights').insert(draft)
     if (error) return friendly(error.message)
     await refresh()
     return null
   }, [refresh])
 
-  const update = useCallback(async (id: string, draft: InsightDraft): Promise<string | null> => {
+  const update = useCallback(async (id: string, draft: PostDraft): Promise<string | null> => {
     const { error } = await supabase.from('insights').update(draft).eq('id', id)
     if (error) return friendly(error.message)
     await refresh()
@@ -123,7 +132,7 @@ export function useInsights() {
     return null
   }, [refresh])
 
-  return { insights, loading, error, refresh, create, update, remove }
+  return { posts, loading, error, refresh, create, update, remove }
 }
 
 /**

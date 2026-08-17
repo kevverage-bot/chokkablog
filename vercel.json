@@ -3,6 +3,10 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    { "source": "/insights", "destination": "/blog", "permanent": true },
+    { "source": "/insights/:slug", "destination": "/blog/:slug", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/((?!.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }
   ],

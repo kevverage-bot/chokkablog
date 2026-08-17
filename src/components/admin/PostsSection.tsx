@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { COLORS } from '../../constants/colors'
 import { TopSection } from '../TopSection'
 import { MarkdownField } from '../MarkdownField'
-import { useInsights, type Insight, type InsightDraft } from '../../hooks/useInsights'
-import { autoExcerpt } from '../../lib/insightExcerpt'
+import { usePosts, type Post, type PostDraft } from '../../hooks/usePosts'
+import { autoExcerpt } from '../../lib/postExcerpt'
 import { formatPostDate } from '../../lib/dates'
-import { pathForInsight } from '../../lib/routes'
+import { pathForPost } from '../../lib/routes'
 
 /** A new post. Unpublished, so writing one is never one mis-click from being live. */
-const EMPTY: InsightDraft = {
+const EMPTY: PostDraft = {
   slug: null, headline: '', short_title: '', summary: '', body: '', footer: '', published: false,
 }
 
@@ -27,19 +27,19 @@ function suggestSlug(headline: string): string {
     .replace(/-+$/, '')
 }
 
-export function InsightsSection() {
-  const { insights, loading, create, update, remove } = useInsights()
+export function PostsSection() {
+  const { posts, loading, create, update, remove } = usePosts()
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const takenSlugs = (exceptId?: string) =>
-    new Set(insights.filter((i) => i.id !== exceptId && i.slug).map((i) => i.slug as string))
+    new Set(posts.filter((i) => i.id !== exceptId && i.slug).map((i) => i.slug as string))
 
   // On failure the editor STAYS OPEN with the message. Closing it would throw
   // the author's writing away while looking like it had saved.
-  const handleCreate = async (draft: InsightDraft) => {
+  const handleCreate = async (draft: PostDraft) => {
     setSaving(true)
     const err = await create(draft)
     setSaving(false)
@@ -47,7 +47,7 @@ export function InsightsSection() {
     if (!err) setAdding(false)
   }
 
-  const handleUpdate = async (id: string, draft: InsightDraft) => {
+  const handleUpdate = async (id: string, draft: PostDraft) => {
     setSaving(true)
     const err = await update(id, draft)
     setSaving(false)
@@ -55,7 +55,7 @@ export function InsightsSection() {
     if (!err) setEditingId(null)
   }
 
-  const handleDelete = async (post: Insight) => {
+  const handleDelete = async (post: Post) => {
     const what = post.headline.trim() || 'this untitled post'
     const extra = post.published
       ? '\n\nIt is PUBLISHED. Any link to it, anywhere, will break.'
@@ -66,7 +66,7 @@ export function InsightsSection() {
   }
 
   return (
-    <TopSection title="Insights" subtitle="the posts — newest first, drafts at the top" defaultOpen>
+    <TopSection title="Blog" subtitle="the posts — newest first, drafts at the top" defaultOpen>
       {!adding && (
         <button
           type="button"
@@ -93,11 +93,11 @@ export function InsightsSection() {
 
       {loading ? (
         <p className="text-sm" style={{ color: COLORS.faint }}>Loading…</p>
-      ) : insights.length === 0 && !adding ? (
+      ) : posts.length === 0 && !adding ? (
         <p className="text-sm" style={{ color: COLORS.faint }}>No posts yet.</p>
       ) : (
         <div className="space-y-2">
-          {insights.map((post) => (
+          {posts.map((post) => (
             <div key={post.id} className="rounded-lg border p-3" style={{ borderColor: COLORS.border }}>
               {editingId === post.id ? (
                 <Editor
@@ -124,7 +124,7 @@ export function InsightsSection() {
 }
 
 /** One post, collapsed. */
-function Row({ post, onEdit, onDelete }: { post: Insight; onEdit: () => void; onDelete: () => void }) {
+function Row({ post, onEdit, onDelete }: { post: Post; onEdit: () => void; onDelete: () => void }) {
   const date = formatPostDate(post.published_at)
   return (
     <div className="flex items-start gap-3">
@@ -141,8 +141,8 @@ function Row({ post, onEdit, onDelete }: { post: Insight; onEdit: () => void; on
           </span>
           {date && <span>{date}</span>}
           {post.slug
-            ? <a href={pathForInsight(post.slug)} className="underline" style={{ color: 'inherit' }}>
-                {pathForInsight(post.slug)}
+            ? <a href={pathForPost(post.slug)} className="underline" style={{ color: 'inherit' }}>
+                {pathForPost(post.slug)}
               </a>
             : <span>no slug yet</span>}
         </div>
@@ -174,11 +174,11 @@ function SaveError({ message }: { message: string }) {
 }
 
 function Editor({ initial, saving, error, takenSlugs, onSave, onCancel }: {
-  initial: InsightDraft
+  initial: PostDraft
   saving: boolean
   error: string | null
   takenSlugs: Set<string>
-  onSave: (draft: InsightDraft) => void
+  onSave: (draft: PostDraft) => void
   onCancel: () => void
 }) {
   const [headline, setHeadline] = useState(initial.headline)
@@ -251,7 +251,7 @@ function Editor({ initial, saving, error, takenSlugs, onSave, onCancel }: {
         )}
       </div>
       <div className={hintCls} style={{ color: COLORS.faint }}>
-        This post&rsquo;s address: <code>/insights/{trimmedSlug || '…'}</code>.{' '}
+        This post&rsquo;s address: <code>/posts/{trimmedSlug || '…'}</code>.{' '}
         {initial.slug && (
           <strong style={{ color: COLORS.negative }}>
             Changing it breaks every existing link to this post, including anything
@@ -298,13 +298,13 @@ function Editor({ initial, saving, error, takenSlugs, onSave, onCancel }: {
       <textarea
         value={summary}
         onChange={(e) => setSummary(e.target.value)}
-        placeholder="One or two sentences for the Insights list and the search-result description."
+        placeholder="One or two sentences for the blog list and the search-result description."
         className={inputCls}
         style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }}
         spellCheck
       />
       <div className={hintCls} style={{ color: COLORS.faint }}>
-        Shown on the Insights list instead of the automatic excerpt, and used as
+        Shown on the blog list instead of the automatic excerpt, and used as
         this page&rsquo;s description in search results and link previews. Blank
         uses the opening of the post.
         {!summary.trim() && body.trim() && (

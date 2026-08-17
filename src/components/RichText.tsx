@@ -314,7 +314,7 @@ function renderInline(text: string, ctx: Ctx, keyBase: string): React.ReactNode[
     } else if (m[3] !== undefined) {
       const url = m[4]
       if (isSafeUrl(url)) {
-        // Only an off-site link opens a new tab. An internal one (/insights/…)
+        // Only an off-site link opens a new tab. An internal one (/blog/…)
         // should navigate in place, or the reader ends up with a tab per post.
         const external = /^https?:/i.test(url)
         out.push(

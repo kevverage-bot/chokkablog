@@ -1,7 +1,7 @@
 import { stripMarkdown } from './markdownText'
 
 /**
- * The one-or-two-sentence excerpt shown for a post on the /insights hub — and,
+ * The one-or-two-sentence excerpt shown for a post on the /blog hub — and,
  * from Phase 3, its `<meta name="description">`.
  *
  * A written `summary` always wins. The auto-excerpt is the fallback, so every
@@ -37,10 +37,10 @@ export function autoExcerpt(body: string, max = 220): string {
 /**
  * The excerpt to show for a post: the written summary, else the automatic one.
  *
- * Takes the fields rather than a whole Insight so the prerenderer can call it
+ * Takes the fields rather than a whole Post so the prerenderer can call it
  * without pulling the app's types in.
  */
-export function insightExcerpt(
+export function postExcerpt(
   fields: { summary?: string | null; body?: string | null },
   max = 220,
 ): string {

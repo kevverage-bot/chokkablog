@@ -1,7 +1,7 @@
 /**
  * URL routing.
  *
- * The *page* lives in the path (from Phase 1, `/insights/<slug>`);
+ * The *page* lives in the path (from Phase 1, `/blog/<slug>`);
  * any view state belongs in the query string. There is no `?p=`-style page param
  * and there never was — this site starts with real paths, which is what lets each
  * post be prerendered at its own URL.
@@ -11,23 +11,27 @@
  * Anything less and the page either renders nothing or exists for readers but
  * not for search. Nothing is listed here before its page exists, which is why
  * `about` and `search` are still absent.
+ *
+ * The blog was `/insights` until August 2026. Those paths are redirected 308 by
+ * vercel.json, so nothing here needs to know about them — but a route added
+ * below must not collide with one, or the redirect will shadow it.
  */
 
 export type PageId =
   | 'home'
-  | 'insights'
+  | 'blog'
   | 'admin'
   | 'login'
 
 /** The canonical path each page is served at. */
 export const PAGE_PATHS: Record<PageId, string> = {
   home: '/',
-  insights: '/insights',
+  blog: '/blog',
   admin: '/admin',
   login: '/login',
 }
 
-const INSIGHT_PREFIX = PAGE_PATHS.insights + '/'
+const POST_PREFIX = PAGE_PATHS.blog + '/'
 
 /** Longest path first, so a nested route is matched before `/`. */
 const PATH_TO_PAGE: [string, PageId][] = (Object.entries(PAGE_PATHS) as [PageId, string][])
@@ -36,8 +40,8 @@ const PATH_TO_PAGE: [string, PageId][] = (Object.entries(PAGE_PATHS) as [PageId,
 
 export interface RouteState {
   page: PageId
-  /** The post's slug on `/insights/<slug>`, else null. */
-  insightSlug: string | null
+  /** The post's slug on `/blog/<slug>`, else null. */
+  postSlug: string | null
   /**
    * True when the path matched nothing. Vercel's catch-all rewrite answers 200
    * for every path (so a post published since the last prerender still works),
@@ -55,14 +59,14 @@ function trimPath(pathname: string): string {
 /** Resolve a pathname to the page it renders. */
 export function parseRoute(pathname: string): RouteState {
   const path = trimPath(pathname)
-  const base: RouteState = { page: 'home', insightSlug: null, notFound: false }
+  const base: RouteState = { page: 'home', postSlug: null, notFound: false }
 
-  if (path.startsWith(INSIGHT_PREFIX)) {
-    const slug = path.slice(INSIGHT_PREFIX.length)
-    // A nested segment (`/insights/a/b`) is not a post, so it falls through to
+  if (path.startsWith(POST_PREFIX)) {
+    const slug = path.slice(POST_PREFIX.length)
+    // A nested segment (`/blog/a/b`) is not a post, so it falls through to
     // notFound rather than looking one up under a slug that cannot exist.
-    if (slug && !slug.includes('/')) return { ...base, page: 'insights', insightSlug: slug }
-    return { ...base, page: 'insights', notFound: true }
+    if (slug && !slug.includes('/')) return { ...base, page: 'blog', postSlug: slug }
+    return { ...base, page: 'blog', notFound: true }
   }
 
   for (const [p, page] of PATH_TO_PAGE) if (p === path) return { ...base, page }
@@ -70,8 +74,8 @@ export function parseRoute(pathname: string): RouteState {
 }
 
 /** The permalink for one post. */
-export function pathForInsight(slug: string): string {
-  return INSIGHT_PREFIX + slug
+export function pathForPost(slug: string): string {
+  return POST_PREFIX + slug
 }
 
 /** The canonical path for a page. */

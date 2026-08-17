@@ -18,7 +18,7 @@ interface NavItem { id: PageId; label: string; adminOnly?: boolean }
 // before its page exists — see the note at the top of lib/routes.ts.
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home' },
-  { id: 'insights', label: 'Insights' },
+  { id: 'blog', label: 'Blog' },
   { id: 'admin', label: 'Admin', adminOnly: true },
 ]
 

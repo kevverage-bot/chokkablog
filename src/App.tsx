@@ -5,12 +5,12 @@ import { NavBar } from './components/NavBar'
 import { SiteFooter } from './components/SiteFooter'
 import { PageLoading } from './components/PageLoading'
 import { HomePage } from './pages/HomePage'
-import { InsightsPage } from './pages/InsightsPage'
-import { InsightPage } from './pages/InsightPage'
+import { BlogPage } from './pages/BlogPage'
+import { PostPage } from './pages/PostPage'
 import { AdminPage, AdminDenied } from './pages/AdminPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { useAuth } from './hooks/useAuth'
-import { parseUrlState, pathForPage, pathForInsight, type PageId } from './lib/routes'
+import { parseUrlState, pathForPage, pathForPost, type PageId } from './lib/routes'
 import { NOT_FOUND_TITLE, STATIC_PAGE_TITLES, useDocumentTitle } from './lib/pageTitle'
 
 /**
@@ -27,7 +27,7 @@ const initialRoute = parseUrlState()
 
 function App() {
   const [page, setPageRaw] = useState<PageId>(initialRoute.page)
-  const [insightSlug, setInsightSlug] = useState<string | null>(initialRoute.insightSlug)
+  const [postSlug, setPostSlug] = useState<string | null>(initialRoute.postSlug)
   const [notFound, setNotFound] = useState(initialRoute.notFound)
   const { profile, loading } = useAuth()
   const isAdmin = profile?.role === 'admin'
@@ -42,25 +42,25 @@ function App() {
    */
   const setPage = useCallback((next: PageId) => {
     const cur = parseUrlState()
-    // Compare the whole route, not just the page id: /insights/<slug> shares its
+    // Compare the whole route, not just the page id: /blog/<slug> shares its
     // id with the hub, so testing the id alone would leave no Back target when
     // returning to the hub from a post.
-    if (cur.page !== next || cur.insightSlug !== null || cur.notFound) {
+    if (cur.page !== next || cur.postSlug !== null || cur.notFound) {
       window.history.pushState(null, '', pathForPage(next))
     }
     setNotFound(false)
-    setInsightSlug(null)
+    setPostSlug(null)
     setPageRaw(next)
   }, [])
 
   /** Open one post's own page. */
-  const selectInsight = useCallback((slug: string) => {
-    if (parseUrlState().insightSlug !== slug) {
-      window.history.pushState(null, '', pathForInsight(slug))
+  const selectPost = useCallback((slug: string) => {
+    if (parseUrlState().postSlug !== slug) {
+      window.history.pushState(null, '', pathForPost(slug))
     }
     setNotFound(false)
-    setInsightSlug(slug)
-    setPageRaw('insights')
+    setPostSlug(slug)
+    setPageRaw('blog')
   }, [])
 
   // Back/forward. Re-read the URL rather than keeping our own stack — the
@@ -69,7 +69,7 @@ function App() {
     const onPop = () => {
       const r = parseUrlState()
       setPageRaw(r.page)
-      setInsightSlug(r.insightSlug)
+      setPostSlug(r.postSlug)
       setNotFound(r.notFound)
     }
     window.addEventListener('popstate', onPop)
@@ -77,14 +77,14 @@ function App() {
   }, [])
 
   // `null` for a page whose title needs data that has not arrived — a post's
-  // headline. InsightPage sets its own once it has it, so it is left out here.
+  // headline. PostPage sets its own once it has it, so it is left out here.
   //
   // /admin reports "Not found" to a non-admin, tab title included: a denial page
   // under a title saying "Admin" tells a stranger the page is real and that they
   // are simply on the wrong side of it. `loading` counts as not-an-admin here so
   // the title does not flick from Admin to Not found while the profile arrives.
   const adminDenied = page === 'admin' && !isAdmin
-  const onPost = page === 'insights' && insightSlug !== null
+  const onPost = page === 'blog' && postSlug !== null
   useDocumentTitle(
     notFound || adminDenied
       ? NOT_FOUND_TITLE
@@ -108,10 +108,10 @@ function App() {
     switch (page) {
       case 'home':
         return <HomePage />
-      case 'insights':
-        return insightSlug
-          ? <InsightPage slug={insightSlug} onNavigate={setPage} onSelect={selectInsight} />
-          : <InsightsPage onSelect={selectInsight} />
+      case 'blog':
+        return postSlug
+          ? <PostPage slug={postSlug} onNavigate={setPage} onSelect={selectPost} />
+          : <BlogPage onSelect={selectPost} />
       case 'login':
         return (
           <Suspense fallback={<PageLoading label="" />}>

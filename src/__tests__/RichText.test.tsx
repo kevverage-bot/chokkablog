@@ -119,7 +119,7 @@ describe('ordinary formatting still works', () => {
 
   it('opens an external link in a new tab but an internal one in place', () => {
     const { container } = render(
-      <RichText text={'[out](https://example.com) and [in](/insights/x)'} />,
+      <RichText text={'[out](https://example.com) and [in](/blog/x)'} />,
     )
     const [ext, int] = Array.from(container.querySelectorAll('a'))
     expect(ext.getAttribute('target')).toBe('_blank')

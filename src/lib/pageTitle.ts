@@ -25,7 +25,7 @@ export const SITE = 'chokkablog'
  */
 export const STATIC_PAGE_TITLES: Partial<Record<PageId, string>> = {
   home: `${SITE} — data-driven analysis of Scotland's economy`,
-  insights: `Insights | ${SITE}`,
+  blog: `Blog | ${SITE}`,
   // Not prerendered (tools, not published pages), so there is nothing for these
   // to match. Naming them still beats leaving the previous page's title in the tab.
   admin: `Admin | ${SITE}`,
@@ -52,7 +52,7 @@ export function plainTitle(md: string): string {
 }
 
 /**
- * One post, at /insights/<slug>.
+ * One post, at /blog/<slug>.
  *
  * `short_title` wins when set. Headlines are written to be read on the page and
  * run long; a tab truncates them and Google cuts around 60 characters. Blank
@@ -61,7 +61,7 @@ export function plainTitle(md: string): string {
  * ⚠ MUST match what the prerenderer writes for the same route, or the tab title
  * changes when a reader refreshes.
  */
-export function insightTitle(headline: string, shortTitle?: string): string {
+export function postTitle(headline: string, shortTitle?: string): string {
   return `${plainTitle(shortTitle?.trim() || headline)} | ${SITE}`
 }
 
