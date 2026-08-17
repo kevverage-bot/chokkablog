@@ -5,7 +5,13 @@
   "outputDirectory": "dist",
   "redirects": [
     { "source": "/insights", "destination": "/blog", "permanent": true },
-    { "source": "/insights/:slug", "destination": "/blog/:slug", "permanent": true }
+    { "source": "/insights/:slug", "destination": "/blog/:slug", "permanent": true },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.chokkablog.com" }],
+      "destination": "https://chokkablog.com/:path*",
+      "permanent": true
+    }
   ],
   "rewrites": [
     { "source": "/((?!.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }

@@ -3,6 +3,7 @@ import { FALLBACK_HOME_CONTENT, FALLBACK_TOOLS } from '../constants/home'
 import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
 import { RichText } from '../components/RichText'
+import { HOME_TITLE } from '../lib/pageTitle'
 import { useHomeContent } from '../hooks/useHomeContent'
 import { useTools, type ToolCard as ToolCardData } from '../hooks/useTools'
 
@@ -33,6 +34,12 @@ export function HomePage() {
 
   return (
     <Container className="py-12 sm:py-16">
+      {/* Visually hidden, and not decoration: the design puts the wordmark where
+          a heading would go, which left this page with no h1 for a crawler or a
+          screen reader to take its subject from. Same string as the tab title
+          and the prerendered snapshot — see HOME_TITLE. */}
+      <h1 className="sr-only">{HOME_TITLE}</h1>
+
       {/* Comes off by being emptied in Admin, not by editing this file — which
           is the point: it says "the blog is coming", and the day that stops
           being true should not need a deploy. */}

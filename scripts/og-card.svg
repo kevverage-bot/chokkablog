@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <rect width="1200" height="1200" fill="#ffffff"/>
+  <rect x="0" y="285" width="1200" height="8" fill="#D85A30"/>
+  <text x="96" y="600" font-family="Helvetica" font-weight="bold" font-size="104" fill="#1a1a1a">Chokkablog<tspan fill="#D85A30">.</tspan></text>
+  <text x="100" y="672" font-family="Helvetica" font-size="40" fill="#666666">Data-driven analysis of Scotland’s economy</text>
+  <text x="100" y="880" font-family="Helvetica" font-size="26" fill="#999999">chokkablog.com</text>
+</svg>

@@ -16,6 +16,15 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* The prerender scripts are plain .mjs (no compile step before the build
+       runs them), and the tests that hold them level with the app's TypeScript
+       import them directly — see src/__tests__/prerender.seo.test.ts. Without
+       this those imports cannot be resolved and the drift tests cannot exist. */
+    "allowJs": true,
+    /* vercel.json is imported by a test, so the redirects it asserts on are the
+       ones Vercel actually reads rather than a copy that can rot. */
+    "resolveJsonModule": true,
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

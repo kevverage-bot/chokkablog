@@ -15,6 +15,17 @@ import type { PageId } from './routes'
 export const SITE = 'chokkablog'
 
 /**
+ * The home page's title AND its h1.
+ *
+ * The design gives the home page no visible heading — the wordmark in the nav
+ * does that job — which left the document with no h1 at all. HomePage renders
+ * this as a visually-hidden one, so the page a crawler reads and the page a
+ * reader lands on are named the same thing. Twin of HOME_TITLE in
+ * scripts/lib/seo.mjs — held together by src/__tests__/prerender.seo.test.ts.
+ */
+export const HOME_TITLE = `${SITE} — data-driven analysis of Scotland's economy`
+
+/**
  * Titles this module can produce with no loaded data.
  *
  * Deliberately incomplete. A page whose title depends on content that arrives
@@ -24,7 +35,7 @@ export const SITE = 'chokkablog'
  * makes the tab flick from the right title to a generic one and back.
  */
 export const STATIC_PAGE_TITLES: Partial<Record<PageId, string>> = {
-  home: `${SITE} — data-driven analysis of Scotland's economy`,
+  home: HOME_TITLE,
   blog: `Blog | ${SITE}`,
   // Not prerendered (tools, not published pages), so there is nothing for these
   // to match. Naming them still beats leaving the previous page's title in the tab.

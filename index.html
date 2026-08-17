@@ -3,11 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The SVG is the icon; the .ico exists because Google probes
+         /favicon.ico and wants a raster of at least 48px, and an SVG alone got
+         the generic globe in search results. All of these are generated from
+         public/favicon.svg by scripts/make-icons.sh and committed. -->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <!-- Google probes /favicon.ico and wants a raster icon of at least 48px; an
-         SVG alone gets the generic globe in search results. Add the .ico and the
-         PNGs alongside this before launch (Phase 3). -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48 96x96" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>chokkablog</title>
+    <!-- The feed. In the shell rather than added per-page by the prerenderer, so
+         it is discoverable from every URL on the site — including one a reader
+         reached before the next build wrote that page's own head tags. -->
+    <link rel="alternate" type="application/rss+xml" title="chokkablog" href="/rss.xml" />
     <!-- No webfont link, deliberately. The design uses the system sans-serif
          stack (see the design concept's notes), which costs no DNS lookup, no
          extra connection and no render-blocking stylesheet. If a webfont is ever
