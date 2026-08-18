@@ -7,7 +7,7 @@ import { PreviewBadge } from '../components/AdminPreview'
 import { PostComments } from '../components/PostComments'
 import { usePosts, type Post } from '../hooks/usePosts'
 import { formatPostDate, isoDate } from '../lib/dates'
-import { pathForPost, pathForPage, plainClick } from '../lib/routes'
+import { pathForPost, pathForPage, plainClick, searchTermFromUrl } from '../lib/routes'
 import { postTitle, useDocumentTitle } from '../lib/pageTitle'
 import { tokenize } from '../lib/search'
 
@@ -25,15 +25,33 @@ export function PostPage({ slug, onNavigate, onSelect }: {
 }) {
   const { posts, loading } = usePosts()
 
-  // One-shot search term: arriving from a search result (Phase 5), the words
-  // that matched are highlighted so it is obvious why this page came back. Read
-  // at render rather than in an effect — posts load asynchronously, and the term
-  // is stripped from the URL once the page settles, so an effect could miss it.
+  // One-shot search term: arriving from a search result, the words that matched
+  // are highlighted so it is obvious why this page came back. Read at render
+  // rather than in an effect — posts load asynchronously, and the term is
+  // stripped from the URL below, so an effect could miss it.
+  //
+  // Keyed on `slug` so the marks do not follow the reader into the NEXT post: the
+  // component stays mounted across a click on Older/Newer, and that post's URL
+  // carries no term to explain why words in it are highlighted.
   const highlight = useMemo(() => {
-    const q = new URLSearchParams(window.location.search).get('q') ?? ''
-    const t = tokenize(q)
+    const t = tokenize(searchTermFromUrl(window.location.search))
     return t.length > 0 ? t : undefined
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug])
+
+  /**
+   * Take the term back off the URL, now that it has been read.
+   *
+   * It is view state that has done its job. Left in place, a reader who copies
+   * the address bar shares this post with a stranger's search terms attached, and
+   * the site accumulates a `?q=` variant of every permalink in analytics and in
+   * anything else that records URLs. replaceState, so Back still goes to the
+   * results rather than to this same page without its highlighting.
+   */
+  useEffect(() => {
+    if (!searchTermFromUrl(window.location.search)) return
+    window.history.replaceState(null, '', window.location.pathname)
+  }, [slug])
 
   const idx = posts.findIndex((i) => i.slug === slug)
   const post = idx >= 0 ? posts[idx] : undefined

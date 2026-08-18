@@ -110,3 +110,72 @@ export function tokenize(q: string): string[] {
   const words = rest.split(/\s+/).filter((t) => t.length >= 2)
   return [...phrases, ...words]
 }
+
+// ── Matching ─────────────────────────────────────────────────────────────
+// Phase 5. A haystack has to be folded before a token is tested against it, or
+// the fold has only been applied to one side of the comparison and the query
+// that a phone typed still misses text written with typographic punctuation —
+// which is the whole failure this file exists to prevent.
+
+/**
+ * Prepare text for comparison against tokens from `tokenize`: lowercased, with
+ * typographic punctuation folded to ASCII.
+ *
+ * Matching only. The result is 1:1 in length with the input, so an index found
+ * in it still points at the right character of the ORIGINAL — which is what lets
+ * `snippet` slice the author's own punctuation out of a match it found here.
+ */
+export function matchable(s: string): string {
+  return foldPunctuation(String(s ?? '').toLowerCase())
+}
+
+/** True if `hay` contains every token. Prefer this over an inline `.includes`,
+ *  which would compare unfolded text against folded tokens. */
+export function matchesAll(hay: string, tokens: string[]): boolean {
+  const h = matchable(hay)
+  return tokens.every((t) => h.includes(t))
+}
+
+/**
+ * A short window of `text` centred on the first token that appears in it, for a
+ * search result's preview — with ellipses where it has been clipped.
+ *
+ * Falls back to the opening of the text when no token is present: a post can
+ * match on its headline alone, and a result with no second line under it reads
+ * as a rendering fault rather than a deliberate absence.
+ *
+ * `text` is expected to be plain prose already (see lib/markdownText) — a
+ * snippet cut out of raw Markdown can open mid-`**` or halfway through a link.
+ */
+export function snippet(text: string, tokens: string[], radius = 90): string {
+  const clean = String(text ?? '').trim()
+  if (!clean) return ''
+  const lower = matchable(clean)
+  let idx = -1
+  for (const t of tokens) {
+    const i = lower.indexOf(t)
+    if (i >= 0 && (idx < 0 || i < idx)) idx = i
+  }
+  if (idx < 0) return clip(clean, radius * 2)
+  // Widen to whole words at both ends, so a snippet never starts or ends
+  // mid-word — an ellipsis butted against half a word looks like a bug.
+  let start = Math.max(0, idx - radius)
+  if (start > 0) {
+    const space = clean.indexOf(' ', start)
+    start = space >= 0 && space < idx ? space + 1 : start
+  }
+  let end = Math.min(clean.length, idx + radius)
+  if (end < clean.length) {
+    const space = clean.lastIndexOf(' ', end)
+    end = space > idx ? space : end
+  }
+  return (start > 0 ? '…' : '') + clean.slice(start, end).trim() + (end < clean.length ? '…' : '')
+}
+
+/** The head of `text`, cut on a word boundary. */
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text
+  const window = text.slice(0, max + 1)
+  const space = window.lastIndexOf(' ')
+  return text.slice(0, space > 0 ? space : max).trimEnd() + '…'
+}

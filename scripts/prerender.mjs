@@ -38,7 +38,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { markdownToHtml, stripMarkdown, clamp, escapeHtml } from './lib/markdown.mjs'
 import {
-  ORIGIN, SITE, AUTHOR, TWITTER, HOME_TITLE, BLOG_TITLE,
+  ORIGIN, SITE, AUTHOR, TWITTER, HOME_TITLE, BLOG_TITLE, SEARCH_TITLE,
   plainTitle, postTitle, postDescription,
 } from './lib/seo.mjs'
 
@@ -343,6 +343,28 @@ async function main() {
     h1: 'Blog',
     intro: "Analysis of Scotland's economy, and of the arguments made about it.",
     sections: [{ html: hubList }],
+  }))
+
+  // ── Search ──
+  // Written for the same reason as any other page — a title, a description and
+  // something in #root instead of an empty shell — but NOINDEX, deliberately.
+  // A results page is one thin page per query: an unbounded set of URLs whose
+  // content is a rearrangement of pages that are already indexed on their own.
+  // Google asks not to be given them, and `noindex` also keeps this out of the
+  // sitemap below, which is generated from the indexable pages only.
+  //
+  // The snapshot carries no results, and could not: the search runs in the
+  // browser over the posts it loads (see src/lib/postSearch.ts). `follow` is
+  // kept so the link out of here still counts.
+  w.write({
+    path: '/search',
+    title: SEARCH_TITLE,
+    description: `Search every post on ${SITE} by keyword.`,
+    noindex: true,
+  }, snapshot({
+    h1: 'Search',
+    intro: 'Every post, by keyword. Put "quotation marks" around words to match them as a phrase.',
+    sections: [{ html: '<p><a href="/blog">All posts</a></p>' }],
   }))
 
   // ── One page per post ──

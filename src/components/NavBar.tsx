@@ -12,13 +12,23 @@ import { Container, CONTAINER_CLS } from './Container'
  * wordmark's dot and the active section.
  */
 
-interface NavItem { id: PageId; label: string; adminOnly?: boolean }
+interface NavItem {
+  id: PageId
+  label: string
+  adminOnly?: boolean
+  /** Shown as a magnifier on the wide layout, where the label would compete with
+   *  the sections for attention — search is a tool, not a part of the site. The
+   *  dropped-down menu still spells it out, because an icon in a list of words
+   *  reads as a missing label. */
+  icon?: 'search'
+}
 
 // Tools, Archive and About join this as their pages land. Nothing is listed
 // before its page exists — see the note at the top of lib/routes.ts.
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home' },
   { id: 'blog', label: 'Blog' },
+  { id: 'search', label: 'Search', icon: 'search' },
   { id: 'admin', label: 'Admin', adminOnly: true },
 ]
 
@@ -138,11 +148,26 @@ function NavLink({ item, active, onClick }: {
       href={pathForPage(item.id)}
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className="text-sm font-semibold no-underline transition-colors"
+      // The icon form keeps its accessible name in aria-label — an anchor whose
+      // only content is an <svg> has no name at all otherwise, and a screen
+      // reader announces it as "link".
+      aria-label={item.icon ? item.label : undefined}
+      title={item.icon ? item.label : undefined}
+      className={`text-sm font-semibold no-underline transition-colors${item.icon ? ' flex items-center' : ''}`}
       style={{ color: active ? COLORS.accent : COLORS.ink }}
     >
-      {item.label}
+      {item.icon ? <SearchIcon /> : item.label}
     </a>
+  )
+}
+
+/** The magnifier. Sized to sit on the nav's baseline with the section labels. */
+function SearchIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="2" />
+      <path d="M14 14l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   )
 }
 

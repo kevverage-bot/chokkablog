@@ -7,6 +7,7 @@ import { PageLoading } from './components/PageLoading'
 import { HomePage } from './pages/HomePage'
 import { BlogPage } from './pages/BlogPage'
 import { PostPage } from './pages/PostPage'
+import { SearchPage } from './pages/SearchPage'
 import { AdminPage, AdminDenied } from './pages/AdminPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { useAuth } from './hooks/useAuth'
@@ -53,10 +54,16 @@ function App() {
     setPageRaw(next)
   }, [])
 
-  /** Open one post's own page. */
-  const selectPost = useCallback((slug: string) => {
+  /**
+   * Open one post's own page.
+   *
+   * `term` is passed when the reader came from a search result: it rides along in
+   * `?q=` so the post can mark the words that matched. PostPage takes it off the
+   * URL again once it has read it — see the note there.
+   */
+  const selectPost = useCallback((slug: string, term?: string) => {
     if (parseUrlState().postSlug !== slug) {
-      window.history.pushState(null, '', pathForPost(slug))
+      window.history.pushState(null, '', pathForPost(slug, term))
     }
     setNotFound(false)
     setPostSlug(slug)
@@ -112,6 +119,8 @@ function App() {
         return postSlug
           ? <PostPage slug={postSlug} onNavigate={setPage} onSelect={selectPost} />
           : <BlogPage onSelect={selectPost} />
+      case 'search':
+        return <SearchPage onNavigate={setPage} onSelect={selectPost} />
       case 'login':
         return (
           <Suspense fallback={<PageLoading label="" />}>

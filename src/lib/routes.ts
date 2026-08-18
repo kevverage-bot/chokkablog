@@ -4,13 +4,14 @@
  * The *page* lives in the path (from Phase 1, `/blog/<slug>`);
  * any view state belongs in the query string. There is no `?p=`-style page param
  * and there never was — this site starts with real paths, which is what lets each
- * post be prerendered at its own URL.
+ * post be prerendered at its own URL. The one piece of view state the site has is
+ * the search term, and it lives in `?q=` — see SEARCH_PARAM below.
  *
  * ⚠ Adding a section means all four of: a `PageId`, a `PAGE_PATHS` entry, a case
  * in App's renderer, and — if it should be found — a route in the prerenderer.
  * Anything less and the page either renders nothing or exists for readers but
  * not for search. Nothing is listed here before its page exists, which is why
- * `about` and `search` are still absent.
+ * `about` is still absent.
  *
  * The blog was `/insights` until August 2026. Those paths are redirected 308 by
  * vercel.json, so nothing here needs to know about them — but a route added
@@ -20,6 +21,7 @@
 export type PageId =
   | 'home'
   | 'blog'
+  | 'search'
   | 'admin'
   | 'login'
 
@@ -27,6 +29,7 @@ export type PageId =
 export const PAGE_PATHS: Record<PageId, string> = {
   home: '/',
   blog: '/blog',
+  search: '/search',
   admin: '/admin',
   login: '/login',
 }
@@ -73,9 +76,45 @@ export function parseRoute(pathname: string): RouteState {
   return { ...base, notFound: true }
 }
 
-/** The permalink for one post. */
-export function pathForPost(slug: string): string {
-  return POST_PREFIX + slug
+/**
+ * The permalink for one post.
+ *
+ * `term` carries the words a reader searched for through to the post, so the
+ * page can mark them (see PostPage) and it is obvious why this result came back.
+ * It is view state, not part of the address: the prerendered `<link rel=canonical>`
+ * points at the bare permalink, and PostPage strips the parameter once it has
+ * read it, so a reader who copies the URL out of the address bar shares the post
+ * rather than their own search.
+ */
+export function pathForPost(slug: string, term?: string): string {
+  const path = POST_PREFIX + slug
+  const q = (term ?? '').trim()
+  return q ? `${path}?${SEARCH_PARAM}=${encodeURIComponent(q)}` : path
+}
+
+// ── The search term ─────────────────────────────────────────────────────────
+// One name for the parameter, used by the results page, by the links out of it,
+// and by the prerenderer's canonical note. `q` because that is what a reader
+// recognises in an address bar, and what an external link to a search is likely
+// to have been written with by hand.
+
+export const SEARCH_PARAM = 'q'
+
+/** The search results page, with a term where there is one. */
+export function pathForSearch(term?: string): string {
+  const q = (term ?? '').trim()
+  return q ? `${PAGE_PATHS.search}?${SEARCH_PARAM}=${encodeURIComponent(q)}` : PAGE_PATHS.search
+}
+
+/**
+ * The search term in a query string (`window.location.search`), or ''.
+ *
+ * Used on arrival at both `/search` and a post: a shared link to a search has to
+ * come back with the search already run, and Back out of a post has to land on
+ * the results the reader left rather than an empty box.
+ */
+export function searchTermFromUrl(search: string): string {
+  return new URLSearchParams(search).get(SEARCH_PARAM)?.trim() ?? ''
 }
 
 /** The canonical path for a page. */

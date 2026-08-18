@@ -36,6 +36,11 @@ export const HOME_TITLE = `${SITE} — data-driven analysis of Scotland's econom
 
 export const BLOG_TITLE = `Blog | ${SITE}`
 
+/** The search page (Phase 5). Prerendered for its title and description only —
+ *  the page itself is `noindex`, because a results page is a different thin page
+ *  per query. Twin of SEARCH_TITLE in src/lib/pageTitle.ts. */
+export const SEARCH_TITLE = `Search | ${SITE}`
+
 /** Twin of plainTitle() in src/lib/pageTitle.ts. A headline may carry inline
  *  Markdown for emphasis on the page; a tab and a search result want the words. */
 export function plainTitle(md) {

@@ -42,6 +42,13 @@ describe('the prerenderer and the app name pages identically', () => {
     expect(build.BLOG_TITLE).toBe(STATIC_PAGE_TITLES.blog)
   })
 
+  it('agrees on the search page title', () => {
+    // /search is prerendered noindex (see routes.test.ts), but it is still a page
+    // a reader lands on and refreshes, so its tab title is produced twice like
+    // every other one and can drift like every other one.
+    expect(build.SEARCH_TITLE).toBe(STATIC_PAGE_TITLES.search)
+  })
+
   it('agrees on who writes here', () => {
     // The app signs an author's reply to a comment with this name; the
     // prerenderer publishes it as the Article's author. A reply signed with one

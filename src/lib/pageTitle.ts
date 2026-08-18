@@ -35,6 +35,17 @@ export const HOME_TITLE = `${SITE} — data-driven analysis of Scotland's econom
  */
 export const AUTHOR = 'Kevin Hague'
 
+export const BLOG_TITLE = `Blog | ${SITE}`
+
+/**
+ * The search page. Deliberately not the query — a tab title that changes as the
+ * reader types is noise in a tab strip, and this string is also what the
+ * prerenderer writes, which cannot know a query at all.
+ *
+ * Twin of SEARCH_TITLE in scripts/lib/seo.mjs.
+ */
+export const SEARCH_TITLE = `Search | ${SITE}`
+
 /**
  * Titles this module can produce with no loaded data.
  *
@@ -46,7 +57,11 @@ export const AUTHOR = 'Kevin Hague'
  */
 export const STATIC_PAGE_TITLES: Partial<Record<PageId, string>> = {
   home: HOME_TITLE,
-  blog: `Blog | ${SITE}`,
+  blog: BLOG_TITLE,
+  // Prerendered, but `noindex` — see the note in scripts/prerender.mjs. The tab
+  // title still has to match what that file writes, because a reader who
+  // refreshes /search would otherwise watch it change.
+  search: SEARCH_TITLE,
   // Not prerendered (tools, not published pages), so there is nothing for these
   // to match. Naming them still beats leaving the previous page's title in the tab.
   admin: `Admin | ${SITE}`,
