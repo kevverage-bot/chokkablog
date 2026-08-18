@@ -118,6 +118,50 @@ the site** — which is the intended state, not a bug.
 not set them, and never put the service-role key in this repo or in any `VITE_`
 variable.
 
+## Rebuilding after publishing
+
+The site is prerendered, so `sitemap.xml`, `rss.xml` and each post's real HTML
+are written during a **build**. Publishing a post in Admin makes it live for
+readers immediately and leaves it invisible to Google, feed readers and link
+previews until the next deploy. Two things close that gap:
+
+- **Admin → Search & feeds → Rebuild now**, which counts what has changed since
+  the last build and starts one.
+- **A nightly rebuild** at 04:10 UTC (`crons` in vercel.json → `/api/rebuild`),
+  so a forgotten click costs a day rather than forever.
+
+Both ring the same doorbell: a **Vercel Deploy Hook**.
+
+### Turning it on
+
+1. Vercel → Settings → Git → **Deploy Hooks** → create one on `main`, called
+   something like `rebuild`. It gives you a URL.
+
+   ⚠ **That URL is a credential.** Anyone holding it can start builds on the
+   project. It never goes anywhere a browser can read it — which is exactly why
+   the Admin button goes through an Edge Function rather than calling the hook
+   directly.
+
+2. Give the URL to the Edge Function, and deploy it:
+
+   ```bash
+   npx supabase secrets set --project-ref <ref> \
+     VERCEL_DEPLOY_HOOK_URL='https://api.vercel.com/v1/integrations/deploy/…'
+   npx supabase functions deploy trigger-rebuild --project-ref <ref> --use-api
+   ```
+
+3. Give the same URL to the nightly cron, in Vercel → Settings → Environment
+   Variables:
+
+   | Name | Value |
+   | --- | --- |
+   | `DEPLOY_HOOK_URL` | the same hook URL |
+   | `CRON_SECRET` | any long random string (`openssl rand -hex 32`) |
+
+   Vercel sends `CRON_SECRET` as a Bearer token with every scheduled call, and
+   `/api/rebuild` refuses anything else. With no secret set it refuses
+   everything, rather than becoming a build trigger anyone can hammer.
+
 ### Checking it works
 
 ```sql

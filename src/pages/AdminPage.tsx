@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { Container } from '../components/Container'
 import { PostsSection } from '../components/admin/PostsSection'
 import { HomeSection } from '../components/admin/HomeSection'
+import { RebuildSection } from '../components/admin/RebuildSection'
 import { CommentsSection } from '../components/admin/CommentsSection'
 import { FeedbackSection } from '../components/admin/FeedbackSection'
 
@@ -33,6 +34,7 @@ export function AdminPage() {
       <CommentsSection />
       <FeedbackSection />
       <PostsSection />
+      <RebuildSection />
       <HomeSection />
       <AccountSection />
     </Container>
