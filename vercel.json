@@ -7,6 +7,12 @@
     { "source": "/insights", "destination": "/blog", "permanent": true },
     { "source": "/insights/:slug", "destination": "/blog/:slug", "permanent": true },
     {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.chokkablog.com" }],
+      "destination": "https://chokkablog.com/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "www.chokkablog.com" }],
       "destination": "https://chokkablog.com/:path*",

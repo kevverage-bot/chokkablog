@@ -89,12 +89,22 @@ describe('the canonical origin', () => {
     // copies of every page. The canonical tag alone does not fix that; the
     // redirect does, and it has to name the same host this constant does.
     expect(build.ORIGIN).toBe('https://chokkablog.com')
-    const wwwRule = vercel.redirects.find((r) => r.has?.some(
+    const wwwRules = vercel.redirects.filter((r) => r.has?.some(
       (h) => h.type === 'host' && h.value.startsWith('www.'),
     ))
-    expect(wwwRule).toBeTruthy()
-    expect(wwwRule?.destination).toContain(build.ORIGIN)
-    expect(wwwRule?.permanent).toBe(true)
+    expect(wwwRules.length).toBeGreaterThan(0)
+    for (const r of wwwRules) {
+      expect(r.destination).toContain(build.ORIGIN)
+      expect(r.permanent).toBe(true)
+    }
+
+    // ⚠ THE ROOT NEEDS ITS OWN RULE. `/:path*` matches every path EXCEPT the
+    // bare `/` on Vercel, so with only the wildcard, www.chokkablog.com/ served
+    // the home page instead of redirecting — a second indexable copy of the one
+    // page most likely to be linked to. Found live, after the first version of
+    // this test passed on the wildcard alone.
+    expect(wwwRules.map((r) => r.source)).toContain('/')
+    expect(wwwRules.map((r) => r.source)).toContain('/:path*')
   })
 
   it('still redirects the old /insights paths', () => {
