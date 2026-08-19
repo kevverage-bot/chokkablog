@@ -25,3 +25,6 @@ supabase/.env*
 
 # Supabase local temp state
 supabase/.temp/
+
+# The generated archive seed. The .gz beside it is committed — see supabase/README.md.
+supabase/data/*.sql

@@ -42,3 +42,116 @@ body {
     display: none !important;
   }
 }
+
+/* ── The archive ──
+   Imported Blogger HTML (supabase/008_archive.sql), rendered as it was written.
+   Tailwind's preflight strips list markers, heading sizes, blockquote indents
+   and bold weights, which the site's own components restore for themselves in
+   their classes — but ten years of hand-written markup carries no classes, so
+   everything it relies on has to be given back here.
+
+   Scoped to .archive-html so nothing leaks into the rest of the site. Every
+   rule below is a browser default being restored, apart from the two guards on
+   img/iframe, which stop a 2014 image with a fixed pixel width from pushing a
+   phone's layout sideways. */
+.archive-html {
+  font-size: 17px;
+  line-height: 1.7;
+  overflow-wrap: break-word;
+}
+.archive-html p {
+  margin: 0 0 1.1em;
+}
+.archive-html b,
+.archive-html strong {
+  font-weight: 700;
+}
+.archive-html i,
+.archive-html em {
+  font-style: italic;
+}
+.archive-html u {
+  text-decoration: underline;
+}
+.archive-html h1,
+.archive-html h2,
+.archive-html h3,
+.archive-html h4 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.8em 0 0.5em;
+  letter-spacing: -0.3px;
+}
+.archive-html h1 { font-size: 1.6em; }
+.archive-html h2 { font-size: 1.35em; }
+.archive-html h3 { font-size: 1.15em; }
+.archive-html h4 { font-size: 1em; }
+.archive-html ul,
+.archive-html ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.6em;
+}
+.archive-html ul { list-style: disc; }
+.archive-html ol { list-style: decimal; }
+.archive-html li { margin: 0 0 0.35em; }
+.archive-html blockquote {
+  margin: 0 0 1.1em;
+  padding-left: 1em;
+  border-left: 2px solid #e8e8e8;
+  color: #666;
+}
+.archive-html a {
+  color: #d85a30;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.archive-html hr {
+  border: 0;
+  border-top: 1px solid #e8e8e8;
+  margin: 1.8em 0;
+}
+.archive-html sup,
+.archive-html sub {
+  font-size: 0.75em;
+  line-height: 0;
+}
+.archive-html sup { vertical-align: super; }
+.archive-html sub { vertical-align: sub; }
+.archive-html table {
+  border-collapse: collapse;
+  margin: 0 0 1.1em;
+}
+.archive-html td,
+.archive-html th {
+  border: 1px solid #e8e8e8;
+  padding: 0.35em 0.6em;
+}
+.archive-html pre {
+  overflow-x: auto;
+  background: #f6f4f2;
+  padding: 0.8em;
+  border-radius: 6px;
+}
+/* ⚠ The two guards. Blogger wrote explicit width/height on every image and
+   every embed; on a phone those are wider than the screen. `!important` because
+   the widths are inline attributes and inline styles, which nothing else beats. */
+.archive-html img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: inline-block;
+}
+.archive-html iframe {
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: 0;
+}
+/* Blogger's own wrapper around an inserted image. It carried the centring. */
+.archive-html .separator {
+  margin: 1.4em 0;
+  text-align: center;
+}
+.archive-html .separator a {
+  display: inline-block;
+  max-width: 100%;
+}

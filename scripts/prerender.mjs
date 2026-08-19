@@ -38,8 +38,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { markdownToHtml, stripMarkdown, clamp, escapeHtml } from './lib/markdown.mjs'
 import {
-  ORIGIN, SITE, AUTHOR, TWITTER, HOME_TITLE, BLOG_TITLE, SEARCH_TITLE,
-  plainTitle, postTitle, postDescription,
+  ORIGIN, SITE, AUTHOR, TWITTER, HOME_TITLE, BLOG_TITLE, SEARCH_TITLE, ARCHIVE_TITLE,
+  plainTitle, postTitle, postDescription, archiveTitle,
 } from './lib/seo.mjs'
 
 const DIST = 'dist'
@@ -87,6 +87,26 @@ async function fetchTable(env, table, query = 'select=*') {
     throw new Error(`${table}: expected rows, got ${JSON.stringify(rows).slice(0, 200)}`)
   }
   return rows
+}
+
+/**
+ * As above, but for a table the deploy must not depend on existing yet.
+ *
+ * The archive's migration (008) and this code reach production by different
+ * routes — one is run by hand in the SQL editor, the other lands on a push — and
+ * whichever arrives second would otherwise take a deploy down with it. A missing
+ * table is a warning and an empty section; anything else still fails the build.
+ */
+async function fetchOptionalTable(env, table, query = 'select=*') {
+  try {
+    return await fetchTable(env, table, query)
+  } catch (err) {
+    if (/\b404\b|PGRST205|does not exist/i.test(String(err.message))) {
+      console.warn(`\n  No ${table} table yet — that section will prerender empty.\n`)
+      return []
+    }
+    throw err
+  }
 }
 
 // ── Head ────────────────────────────────────────────────────────────────────
@@ -164,6 +184,19 @@ const SEO_END = '<!--seo:end-->'
 const SHELL_TITLE = `<title>${SITE}</title>`
 
 /**
+ * The snapshot's own fences.
+ *
+ * ⚠ These replaced a regex that matched `<div id="root">` to the first `</div>`,
+ * which worked only because no snapshot contained a div — asserted on write. The
+ * archive broke that assumption on day one: ten years of Blogger HTML is 4,270
+ * divs, and there is no version of "strip the divs" that leaves the layout
+ * intact. Fences make the rule explicit instead of implicit, and idempotence no
+ * longer depends on what the content happens to be made of.
+ */
+const SNAP_START = '<!--snap:start-->'
+const SNAP_END = '<!--snap:end-->'
+
+/**
  * Return the pristine shell, whether or not `html` has already been prerendered.
  *
  * Without this the script is only correct on a freshly built dist: run it twice
@@ -177,7 +210,7 @@ const SHELL_TITLE = `<title>${SITE}</title>`
 function normaliseShell(html) {
   return html
     .replace(new RegExp(`${SEO_START}[\\s\\S]*?${SEO_END}`), SHELL_TITLE)
-    .replace(/<div id="root">[\s\S]*?<\/div>/, '<div id="root"></div>')
+    .replace(new RegExp(`<div id="root">${SNAP_START}[\\s\\S]*?${SNAP_END}</div>`), '<div id="root"></div>')
 }
 
 function makeWriter(template, hasCard) {
@@ -186,18 +219,18 @@ function makeWriter(template, hasCard) {
     written,
     write(p, bodyHtml) {
       const body = bodyHtml ?? ''
-      // normaliseShell's root regex stops at the first </div>, so a snapshot
-      // containing one would leave debris behind on a re-run.
-      if (body.includes('<div')) {
-        throw new Error(`prerender: ${p.path} snapshot contains a <div>; snapshots must not`)
+      // The fences are what make a re-run idempotent, so content that contains
+      // one would strand the rest of the snapshot outside them.
+      if (body.includes(SNAP_START) || body.includes(SNAP_END)) {
+        throw new Error(`prerender: ${p.path} snapshot contains a snapshot fence`)
       }
       const html = template
         .replace(/<title>[^<]*<\/title>/, `${SEO_START}${head(p, hasCard)}${SEO_END}`)
-        .replace('<div id="root"></div>', `<div id="root">${body}</div>`)
+        .replace('<div id="root"></div>', `<div id="root">${SNAP_START}${body}${SNAP_END}</div>`)
       if (!html.includes(SEO_START)) {
         throw new Error('prerender: no <title> in the built shell to anchor the head tags to')
       }
-      if (!html.includes(`<div id="root">${body}</div>`)) {
+      if (!html.includes(`${SNAP_START}${body}${SNAP_END}`)) {
         throw new Error('prerender: #root not found in the built shell')
       }
       const file = p.path === '/' ? join(DIST, 'index.html') : join(DIST, p.path, 'index.html')
@@ -249,10 +282,18 @@ async function main() {
 
   // `insights` is the table; the section it feeds is the blog. See the note at
   // the top of src/hooks/usePosts.ts for why the name stayed behind.
-  const [postRows, homeRows, toolRows] = await Promise.all([
+  const [postRows, homeRows, toolRows, archiveRows] = await Promise.all([
     fetchTable(env, 'insights', 'select=*&order=published_at.desc.nullslast'),
     fetchTable(env, 'home_content', 'select=badge,intro,tools_heading'),
     fetchTable(env, 'tools', 'select=name,description,url,wip&order=sort_order.asc'),
+    // The whole archive, bodies included — 3.2MB, fetched once at build time so
+    // that no reader ever has to. See the note in src/hooks/useArchive.ts.
+    fetchOptionalTable(
+      env,
+      'archive_posts',
+      'select=path,title,html,excerpt,note,labels,published_at,original_url,updated_at'
+      + '&order=published_at.desc',
+    ),
   ])
 
   // The anon key means RLS has already excluded drafts, so everything here is
@@ -260,6 +301,8 @@ async function main() {
   // an admin has published without an address cannot have a URL to write.
   const posts = postRows.filter((p) => p.slug && p.published)
   const home = homeRows[0] ?? { badge: '', intro: '', tools_heading: 'Tools' }
+  // Newest first, and never a row without an address to write it to.
+  const archive = archiveRows.filter((a) => a.path)
   const w = makeWriter(template, hasCard)
 
   const publisher = {
@@ -403,11 +446,104 @@ async function main() {
     }))
   }
 
+  // ── The archive ──
+  // The old Blogger site, rehosted. This is the half of the section that Google
+  // sees: 229 pages of real HTML at their new addresses, each one carrying the
+  // ORIGINAL publication date, so a post that has ranked since 2015 keeps saying
+  // it is from 2015 rather than looking like something published this morning.
+  //
+  // ⚠ THE INDEX IS THE CRAWL PATH. Nothing else on the site links to 229 old
+  // posts, so if the year-by-year list below stops being written, every archive
+  // page becomes an orphan reachable only from the sitemap.
+  if (archive.length) {
+    const byYear = new Map()
+    for (const a of archive) {
+      const year = a.path.slice(0, 4)
+      if (!byYear.has(year)) byYear.set(year, [])
+      byYear.get(year).push(a)
+    }
+    const yearSections = [...byYear.entries()].map(([year, list]) => ({
+      heading: year,
+      html: `<ul>${list.map((a) =>
+        `<li><a href="/archive/${a.path}">${escapeHtml(a.title)}</a>`
+        + `${timeTag(a.published_at).replace(/^<p>|<\/p>$/g, ' ')}</li>`).join('\n')}</ul>`,
+    }))
+
+    w.write({
+      path: '/archive',
+      title: ARCHIVE_TITLE,
+      description: `Everything published on the original Chokkablog between ${
+        archive[archive.length - 1].path.slice(0, 4)} and ${archive[0].path.slice(0, 4)
+      } — ${archive.length} posts, rehosted with their original dates.`,
+      jsonLd: [{
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: ARCHIVE_TITLE,
+        url: `${ORIGIN}/archive`,
+        author,
+        publisher,
+      }],
+    }, snapshot({
+      h1: 'Archive',
+      intro: 'Everything published on the original Chokkablog between 2010 and 2022,'
+        + ' rehosted here with its original dates. The writing stands as it was —'
+        + ' the figures in it are of their time.',
+      sections: yearSections,
+    }))
+
+    for (const a of archive) {
+      const url = `${ORIGIN}/archive/${a.path}`
+      const year = a.path.slice(0, 4)
+      const description = clamp(a.excerpt || a.title)
+      w.write({
+        path: `/archive/${a.path}`,
+        title: archiveTitle(a.title),
+        description,
+        type: 'article',
+        published: a.published_at ?? undefined,
+        modified: a.updated_at ?? a.published_at ?? undefined,
+        jsonLd: [{
+          '@context': 'https://schema.org',
+          '@type': 'BlogPosting',
+          headline: plainTitle(a.title),
+          description,
+          url,
+          mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+          // The date it was ACTUALLY published, which is the whole point of
+          // rehosting rather than reposting.
+          datePublished: a.published_at,
+          dateModified: a.updated_at ?? a.published_at,
+          author,
+          publisher,
+          isPartOf: { '@type': 'Blog', name: ARCHIVE_TITLE, url: `${ORIGIN}/archive` },
+        }],
+      }, snapshot({
+        h1: a.title,
+        meta: timeTag(a.published_at),
+        sections: [
+          // Said in the snapshot as well as on the page: a crawler that never
+          // runs the app still reads that this is old, and so does anyone
+          // arriving with JavaScript off.
+          { html: `<p><em>From the archive — published in ${year} on the original Chokkablog, kept as it was written.</em></p>` },
+          a.note ? { html: markdownToHtml(a.note) } : null,
+          { html: a.html },
+          { html: `<p><a href="/archive">All archive posts</a> · <a href="/blog">What I'm writing now</a></p>` },
+        ].filter(Boolean),
+      }))
+    }
+  }
+
   // ── sitemap ──
   // Generated from what was actually written, so it cannot drift from the routes
   // that exist. `lastmod` comes from the row, not from the build clock: a
   // rebuild that changed nothing must not tell a crawler everything is new.
-  const lastmodOf = new Map(posts.map((p) => [`/blog/${p.slug}`, (p.updated_at ?? p.published_at ?? '').slice(0, 10)]))
+  const lastmodOf = new Map([
+    ...posts.map((p) => [`/blog/${p.slug}`, (p.updated_at ?? p.published_at ?? '').slice(0, 10)]),
+    // An archive post's lastmod is the day it was published, unless a note has
+    // been added since. Telling a crawler that 229 pages changed today, every
+    // time the site is rebuilt, is how a sitemap stops being believed.
+    ...archive.map((a) => [`/archive/${a.path}`, (a.updated_at ?? a.published_at ?? '').slice(0, 10)]),
+  ])
   const newest = posts[0]?.updated_at?.slice(0, 10)
   const indexable = w.written.filter((p) => !p.noindex)
   const urls = indexable.map((p) => {
@@ -486,7 +622,7 @@ async function main() {
 
   console.log(
     `prerendered ${w.written.length} pages — ${posts.length} post${posts.length === 1 ? '' : 's'}, `
-    + `sitemap lists ${indexable.length}, rss.xml has ${posts.length}`,
+    + `${archive.length} archived, sitemap lists ${indexable.length}, rss.xml has ${posts.length}`,
   )
 }
 

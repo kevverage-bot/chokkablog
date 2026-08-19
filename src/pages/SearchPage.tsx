@@ -5,29 +5,41 @@ import { InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
 import { highlightText } from '../lib/highlight'
 import { usePosts } from '../hooks/usePosts'
+import { useArchiveSearch, type ArchiveSummary } from '../hooks/useArchive'
 import { searchPosts, type PostHit } from '../lib/postSearch'
 import { tokenize } from '../lib/search'
 import { formatPostDate, isoDate } from '../lib/dates'
-import { pathForPage, pathForPost, pathForSearch, plainClick, searchTermFromUrl } from '../lib/routes'
+import {
+  pathForArchive, pathForPage, pathForPost, pathForSearch, plainClick, searchTermFromUrl,
+} from '../lib/routes'
 
 /**
  * Site search, at /search.
  *
- * Searching happens as the reader types, against the posts already in the
- * browser — there is no request to wait for, so there is no submit button and no
- * "Searching…" spinner once the posts have loaded. The rules it applies (which
- * fields count for how much, and why every word has to match) are in
- * lib/postSearch; the tokenising, quoting and punctuation-folding are in
- * lib/search, shared with the highlighting a post does on arrival.
+ * TWO CORPORA, SEARCHED TWO WAYS, under one box.
+ *
+ * The blog is searched as the reader types, against the posts already in the
+ * browser — no request to wait for, so no submit button. The archive cannot work
+ * that way: 229 old posts are 3.2MB of text that nobody should download to type
+ * in a box, so it is searched in Postgres over a full-text index and arrives a
+ * moment later (see useArchiveSearch). The reader is told which is which,
+ * because a 2015 answer and a 2026 answer to the same question are different
+ * answers.
+ *
+ * The rules the blog side applies (which fields count for how much, and why
+ * every word has to match) are in lib/postSearch; the tokenising, quoting and
+ * punctuation-folding are in lib/search, shared with the highlighting a post
+ * does on arrival.
  *
  * ⚠ The page is prerendered `noindex`. A search results page is thin, infinitely
  * variable content — one URL per query — and Google asks not to be given it.
  * Every result here links to a real permalink that IS indexed, which is the page
  * that should come back from a search engine anyway.
  */
-export function SearchPage({ onNavigate, onSelect }: {
+export function SearchPage({ onNavigate, onSelect, onSelectArchive }: {
   onNavigate: (page: 'blog') => void
   onSelect: (slug: string, term?: string) => void
+  onSelectArchive: (path: string) => void
 }) {
   const { posts, loading } = usePosts()
 
@@ -39,6 +51,9 @@ export function SearchPage({ onNavigate, onSelect }: {
   const tokens = useMemo(() => tokenize(term), [term])
   const hits = useMemo(() => searchPosts(posts, tokens), [posts, tokens])
   const searching = tokens.length > 0
+  const { hits: archiveHits, searching: archiveSearching } = useArchiveSearch(term)
+  const waiting = loading || archiveSearching
+  const found = hits.length + archiveHits.length
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -108,23 +123,45 @@ export function SearchPage({ onNavigate, onSelect }: {
 
       {!searching ? (
         <Hint onNavigate={onNavigate} />
-      ) : loading ? (
-        // The only wait on this page, and only on a cold load straight to
-        // /search?q=… — everywhere else the posts are already here.
-        <p className="text-sm" style={{ color: COLORS.faint }}>Searching…</p>
-      ) : hits.length === 0 ? (
-        <Nothing term={term} onNavigate={onNavigate} />
       ) : (
         <>
-          <p className="text-sm mb-6" style={{ color: COLORS.muted }}>
-            {hits.length} {hits.length === 1 ? 'post' : 'posts'} matching{' '}
-            <span style={{ color: COLORS.ink }}>{term.trim()}</span>
-          </p>
-          <div className="space-y-8">
-            {hits.map((hit) => (
-              <Result key={hit.post.id} hit={hit} tokens={tokens} term={term} onSelect={onSelect} />
-            ))}
-          </div>
+          {hits.length > 0 && (
+            <section className="mb-12">
+              <GroupHeading
+                title="Blog"
+                count={hits.length}
+                note="what I'm writing now"
+              />
+              <div className="space-y-8">
+                {hits.map((hit) => (
+                  <Result key={hit.post.id} hit={hit} tokens={tokens} term={term} onSelect={onSelect} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {archiveHits.length > 0 && (
+            <section className="mb-12">
+              <GroupHeading
+                title="Archive"
+                count={archiveHits.length}
+                note="the original Chokkablog, 2010–2022"
+              />
+              <ul className="m-0 p-0 list-none space-y-6">
+                {archiveHits.map((hit) => (
+                  <ArchiveResult key={hit.path} hit={hit} tokens={tokens} onSelect={onSelectArchive} />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* One line, not two: the archive answers a beat after the blog, and a
+              "Searching…" that appears under results already on screen reads as
+              a fault rather than as progress. */}
+          {waiting && found === 0 && (
+            <p className="text-sm" style={{ color: COLORS.faint }}>Searching…</p>
+          )}
+          {!waiting && found === 0 && <Nothing term={term} onNavigate={onNavigate} />}
         </>
       )}
     </Container>
@@ -189,6 +226,56 @@ function Result({ hit, tokens, term, onSelect }: {
   )
 }
 
+/** The heading over one corpus's results. Present only when that corpus has
+ *  any, so a search that only hits the blog does not advertise an empty
+ *  archive — and a search that hits both makes the difference impossible to
+ *  miss. */
+function GroupHeading({ title, count, note }: { title: string; count: number; note: string }) {
+  return (
+    <div className="flex items-baseline gap-2 mb-5 pb-2 border-b" style={{ borderColor: COLORS.border }}>
+      <h2 className="text-sm font-bold uppercase m-0" style={{ color: COLORS.ink, letterSpacing: '1px' }}>
+        {title}
+      </h2>
+      <span className="text-sm num" style={{ color: COLORS.faint }}>({count})</span>
+      <span className="text-xs ml-auto text-right" style={{ color: COLORS.faint }}>{note}</span>
+    </div>
+  )
+}
+
+/** One archive hit. Lighter than a blog result — a date, a title and the stored
+ *  excerpt — because that is all the list query fetched. */
+function ArchiveResult({ hit, tokens, onSelect }: {
+  hit: ArchiveSummary
+  tokens: string[]
+  onSelect: (path: string) => void
+}) {
+  const href = pathForArchive(hit.path)
+  return (
+    <li>
+      <a
+        href={href}
+        onClick={(e) => { if (plainClick(e)) { e.preventDefault(); onSelect(hit.path) } }}
+        className="no-underline hover:underline underline-offset-4"
+      >
+        <span className="text-lg sm:text-xl font-bold leading-snug" style={{ color: COLORS.ink }}>
+          {highlightText(hit.title, tokens)}
+        </span>
+      </a>
+      {hit.excerpt && (
+        <p className="text-[15px] leading-relaxed mt-1 mb-2 max-w-2xl" style={{ color: COLORS.muted }}>
+          {/* Highlighted with the reader's own words, which Postgres may not have
+              matched literally — it stems, so "borrowing" can find "borrow". A
+              hit with nothing marked in it is that, not a bug. */}
+          {highlightText(hit.excerpt, tokens)}
+        </p>
+      )}
+      <div className="text-xs num" style={{ color: COLORS.faint }}>
+        <time dateTime={isoDate(hit.published_at)}>{formatPostDate(hit.published_at)}</time>
+      </div>
+    </li>
+  )
+}
+
 function Hint({ onNavigate }: { onNavigate: (page: 'blog') => void }) {
   return (
     <p className="text-sm" style={{ color: COLORS.faint }}>
@@ -202,7 +289,8 @@ function Nothing({ term, onNavigate }: { term: string; onNavigate: (page: 'blog'
   return (
     <div>
       <p className="text-sm mb-2" style={{ color: COLORS.muted }}>
-        Nothing matches <span style={{ color: COLORS.ink }}>{term.trim()}</span>.
+        Nothing matches <span style={{ color: COLORS.ink }}>{term.trim()}</span>, in
+        the blog or the archive.
       </p>
       <p className="text-sm" style={{ color: COLORS.faint }}>
         Every word has to appear in a post, so fewer words find more.{' '}

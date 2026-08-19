@@ -6,6 +6,7 @@ import { PostsSection } from '../components/admin/PostsSection'
 import { HomeSection } from '../components/admin/HomeSection'
 import { RebuildSection } from '../components/admin/RebuildSection'
 import { CommentsSection } from '../components/admin/CommentsSection'
+import { ArchiveSection } from '../components/admin/ArchiveSection'
 import { FeedbackSection } from '../components/admin/FeedbackSection'
 
 /**
@@ -15,8 +16,9 @@ import { FeedbackSection } from '../components/admin/FeedbackSection'
  * Explorer is that anything with SOMEBODY WAITING IN IT goes first — hence the
  * two inboxes at the top, each opening itself only when it is not empty. An
  * unread comment is a reader waiting in public; a draft is not waiting for
- * anyone. Below them the blog, which is the daily work, then Home, which is
- * edited a few times a year.
+ * anyone. Below them the blog, which is the daily work, then the archive — 229
+ * finished posts that are only ever annotated — then Home, edited a few times a
+ * year.
  *
  * ⚠ This component renders only for an admin (App checks the role, and /admin
  * is disallowed in robots.txt), but that is presentation, not security.
@@ -34,6 +36,7 @@ export function AdminPage() {
       <CommentsSection />
       <FeedbackSection />
       <PostsSection />
+      <ArchiveSection />
       <RebuildSection />
       <HomeSection />
       <AccountSection />

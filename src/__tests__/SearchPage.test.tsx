@@ -28,14 +28,43 @@ const POSTS = [
   },
 ]
 
-/** usePosts' one query is a chain ending in an await, so the fake is thenable. */
+const ARCHIVE = [
+  {
+    path: '2015/03/oil-and-the-deficit', title: 'Oil and the deficit',
+    excerpt: 'What the 2015 numbers actually showed about oil.',
+    published_at: '2015-03-04T09:00:00Z', labels: ['GERS'], comment_count: 12,
+  },
+]
+
+/**
+ * Both queries are chains ending in an await, so the fake is thenable — and it
+ * answers per TABLE, because this page now searches two of them: the blog in the
+ * browser, and the archive in Postgres.
+ */
 vi.mock('../lib/supabase', () => {
-  const chain: Record<string, unknown> = {}
-  chain.select = () => chain
-  chain.order = () => chain
-  chain.then = (ok: (v: unknown) => unknown, err?: (e: unknown) => unknown) =>
-    Promise.resolve({ data: POSTS, error: null }).then(ok, err)
-  return { supabase: { from: () => chain } }
+  const make = (rows: unknown[]) => {
+    let result = rows
+    const chain: Record<string, unknown> = {}
+    for (const method of ['select', 'order', 'eq', 'limit']) chain[method] = () => chain
+    // Stands in for Postgres full-text search: naive, but term-aware, which is
+    // the part the page's behaviour depends on.
+    chain.textSearch = (_column: string, query: string) => {
+      const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+      result = rows.filter((row) => {
+        const hay = JSON.stringify(row).toLowerCase()
+        return words.every((w) => hay.includes(w))
+      })
+      return chain
+    }
+    chain.then = (ok: (v: unknown) => unknown, err?: (e: unknown) => unknown) =>
+      Promise.resolve({ data: result, error: null }).then(ok, err)
+    return chain
+  }
+  return {
+    supabase: {
+      from: (table: string) => make(table === 'archive_posts' ? ARCHIVE : POSTS),
+    },
+  }
 })
 
 const noop = () => {}
@@ -50,23 +79,48 @@ beforeEach(() => {
 
 describe('SearchPage', () => {
   it('invites a search rather than listing everything', async () => {
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
 
     expect(await screen.findByText(/Type a word or two/)).toBeTruthy()
     expect(screen.queryByText('The deficit, explained')).toBeNull()
   })
 
-  it('searches as the reader types, and says how many matched', async () => {
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
-    await userEvent.type(screen.getByLabelText('Search the blog'), 'oil')
+  it('searches as the reader types, and groups what it found', async () => {
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
+    await userEvent.type(screen.getByLabelText('Search the blog'), 'gas')
 
     expect(await screen.findByText('North Sea revenue')).toBeTruthy()
     expect(screen.queryByText('The deficit, explained')).toBeNull()
-    expect(screen.getByText(/1 post matching/)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Blog' })).toBeTruthy()
+    // Nothing in the archive matched, so the reader is not shown an empty one.
+    expect(screen.queryByRole('heading', { name: 'Archive' })).toBeNull()
+  })
+
+  it('searches the archive too, under its own heading', async () => {
+    // The archive cannot be searched in the browser — 3.2MB of old posts — so
+    // it comes back from Postgres a beat later, and the two are kept apart
+    // because a 2015 answer and a 2026 answer are different answers.
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
+    await userEvent.type(screen.getByLabelText('Search the blog'), 'oil')
+
+    // By role, not by text: "Oil" is highlighted, which splits the title across
+    // a <mark> and two text nodes.
+    const link = await screen.findByRole('link', { name: /Oil and the deficit/ })
+    expect(link.getAttribute('href')).toBe('/archive/2015/03/oil-and-the-deficit')
+    expect(screen.getByRole('heading', { name: 'Archive' })).toBeTruthy()
+  })
+
+  it('opens an archive result in-app', async () => {
+    const onSelectArchive = vi.fn()
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={onSelectArchive} />)
+    await userEvent.type(screen.getByLabelText('Search the blog'), 'oil')
+
+    await userEvent.click(await screen.findByRole('link', { name: /Oil and the deficit/ }))
+    expect(onSelectArchive).toHaveBeenCalledWith('2015/03/oil-and-the-deficit')
   })
 
   it('marks the matched words in the snippet, so the hit is visible', async () => {
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
     await userEvent.type(screen.getByLabelText('Search the blog'), 'borrowing')
 
     const mark = await waitFor(() => {
@@ -78,7 +132,7 @@ describe('SearchPage', () => {
   })
 
   it('links each result to its permalink, carrying the term', async () => {
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
     await userEvent.type(screen.getByLabelText('Search the blog'), 'oil')
 
     const link = await screen.findByRole('link', { name: /North Sea revenue/ })
@@ -88,7 +142,7 @@ describe('SearchPage', () => {
 
   it('routes a plain click in-app, and leaves a modified one to the browser', async () => {
     const onSelect = vi.fn()
-    render(<SearchPage onNavigate={noop} onSelect={onSelect} />)
+    render(<SearchPage onNavigate={noop} onSelect={onSelect} onSelectArchive={noop} />)
     await userEvent.type(screen.getByLabelText('Search the blog'), 'oil')
     const link = await screen.findByRole('link', { name: /North Sea revenue/ })
 
@@ -102,23 +156,24 @@ describe('SearchPage', () => {
   })
 
   it('says so, once, when nothing matches', async () => {
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
     await userEvent.type(screen.getByLabelText('Search the blog'), 'unicorns')
 
     expect(await screen.findByText(/Nothing matches/)).toBeTruthy()
-    expect(screen.queryByText(/posts matching/)).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Blog' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Archive' })).toBeNull()
   })
 
   it('runs the search already when arriving from a shared /search?q= link', async () => {
     window.history.replaceState(null, '', '/search?q=oil')
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
 
     expect(await screen.findByText('North Sea revenue')).toBeTruthy()
     expect(box().value).toBe('oil')
   })
 
   it('puts the term in the URL, so a search can be shared or bookmarked', async () => {
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
     await userEvent.type(screen.getByLabelText('Search the blog'), 'north sea')
 
     await waitFor(() => {
@@ -128,7 +183,7 @@ describe('SearchPage', () => {
 
   it('clears the box and the URL together', async () => {
     window.history.replaceState(null, '', '/search?q=oil')
-    render(<SearchPage onNavigate={noop} onSelect={noop} />)
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
     await screen.findByText('North Sea revenue')
 
     await userEvent.click(screen.getByLabelText('Clear search'))

@@ -8,10 +8,12 @@ import { HomePage } from './pages/HomePage'
 import { BlogPage } from './pages/BlogPage'
 import { PostPage } from './pages/PostPage'
 import { SearchPage } from './pages/SearchPage'
+import { ArchivePage } from './pages/ArchivePage'
+import { ArchivePostPage } from './pages/ArchivePostPage'
 import { AdminPage, AdminDenied } from './pages/AdminPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { useAuth } from './hooks/useAuth'
-import { parseUrlState, pathForPage, pathForPost, type PageId } from './lib/routes'
+import { parseUrlState, pathForArchive, pathForPage, pathForPost, type PageId } from './lib/routes'
 import { NOT_FOUND_TITLE, STATIC_PAGE_TITLES, useDocumentTitle } from './lib/pageTitle'
 
 /**
@@ -29,6 +31,7 @@ const initialRoute = parseUrlState()
 function App() {
   const [page, setPageRaw] = useState<PageId>(initialRoute.page)
   const [postSlug, setPostSlug] = useState<string | null>(initialRoute.postSlug)
+  const [archivePath, setArchivePath] = useState<string | null>(initialRoute.archivePath)
   const [notFound, setNotFound] = useState(initialRoute.notFound)
   const { profile, loading } = useAuth()
   const isAdmin = profile?.role === 'admin'
@@ -51,6 +54,7 @@ function App() {
     }
     setNotFound(false)
     setPostSlug(null)
+    setArchivePath(null)
     setPageRaw(next)
   }, [])
 
@@ -66,8 +70,20 @@ function App() {
       window.history.pushState(null, '', pathForPost(slug, term))
     }
     setNotFound(false)
+    setArchivePath(null)
     setPostSlug(slug)
     setPageRaw('blog')
+  }, [])
+
+  /** Open one archive post, by its Blogger `YYYY/MM/slug`. */
+  const selectArchive = useCallback((path: string) => {
+    if (parseUrlState().archivePath !== path) {
+      window.history.pushState(null, '', pathForArchive(path))
+    }
+    setNotFound(false)
+    setPostSlug(null)
+    setArchivePath(path)
+    setPageRaw('archive')
   }, [])
 
   // Back/forward. Re-read the URL rather than keeping our own stack — the
@@ -77,6 +93,7 @@ function App() {
       const r = parseUrlState()
       setPageRaw(r.page)
       setPostSlug(r.postSlug)
+      setArchivePath(r.archivePath)
       setNotFound(r.notFound)
     }
     window.addEventListener('popstate', onPop)
@@ -91,7 +108,9 @@ function App() {
   // are simply on the wrong side of it. `loading` counts as not-an-admin here so
   // the title does not flick from Admin to Not found while the profile arrives.
   const adminDenied = page === 'admin' && !isAdmin
-  const onPost = page === 'blog' && postSlug !== null
+  // Both kinds of post set their own title once the text has arrived.
+  const onPost = (page === 'blog' && postSlug !== null)
+    || (page === 'archive' && archivePath !== null)
   useDocumentTitle(
     notFound || adminDenied
       ? NOT_FOUND_TITLE
@@ -120,7 +139,11 @@ function App() {
           ? <PostPage slug={postSlug} onNavigate={setPage} onSelect={selectPost} />
           : <BlogPage onSelect={selectPost} />
       case 'search':
-        return <SearchPage onNavigate={setPage} onSelect={selectPost} />
+        return <SearchPage onNavigate={setPage} onSelect={selectPost} onSelectArchive={selectArchive} />
+      case 'archive':
+        return archivePath
+          ? <ArchivePostPage path={archivePath} onNavigate={setPage} />
+          : <ArchivePage onNavigate={setPage} onSelect={selectArchive} />
       case 'login':
         return (
           <Suspense fallback={<PageLoading label="" />}>

@@ -37,6 +37,9 @@ export const AUTHOR = 'Kevin Hague'
 
 export const BLOG_TITLE = `Blog | ${SITE}`
 
+/** The archive index. Twin of ARCHIVE_TITLE in scripts/lib/seo.mjs. */
+export const ARCHIVE_TITLE = `Archive | ${SITE}`
+
 /**
  * The search page. Deliberately not the query — a tab title that changes as the
  * reader types is noise in a tab strip, and this string is also what the
@@ -58,6 +61,7 @@ export const SEARCH_TITLE = `Search | ${SITE}`
 export const STATIC_PAGE_TITLES: Partial<Record<PageId, string>> = {
   home: HOME_TITLE,
   blog: BLOG_TITLE,
+  archive: ARCHIVE_TITLE,
   // Prerendered, but `noindex` — see the note in scripts/prerender.mjs. The tab
   // title still has to match what that file writes, because a reader who
   // refreshes /search would otherwise watch it change.
@@ -99,6 +103,20 @@ export function plainTitle(md: string): string {
  */
 export function postTitle(headline: string, shortTitle?: string): string {
   return `${plainTitle(shortTitle?.trim() || headline)} | ${SITE}`
+}
+
+/**
+ * One archive post.
+ *
+ * The same shape as a blog post's title, deliberately: an old post is still a
+ * post, and giving the archive its own suffix would only spend the characters
+ * Google cuts at on saying so twice — the URL already carries /archive/.
+ *
+ * ⚠ MUST match what the prerenderer writes. Twin of archiveTitle() in
+ * scripts/lib/seo.mjs.
+ */
+export function archiveTitle(title: string): string {
+  return `${plainTitle(title)} | ${SITE}`
 }
 
 /**

@@ -23,11 +23,12 @@ interface NavItem {
   icon?: 'search'
 }
 
-// Tools, Archive and About join this as their pages land. Nothing is listed
-// before its page exists — see the note at the top of lib/routes.ts.
+// Tools and About join this as their pages land. Nothing is listed before its
+// page exists — see the note at the top of lib/routes.ts.
 const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home' },
   { id: 'blog', label: 'Blog' },
+  { id: 'archive', label: 'Archive' },
   { id: 'search', label: 'Search', icon: 'search' },
   { id: 'admin', label: 'Admin', adminOnly: true },
 ]

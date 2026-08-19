@@ -41,6 +41,15 @@ export const BLOG_TITLE = `Blog | ${SITE}`
  *  per query. Twin of SEARCH_TITLE in src/lib/pageTitle.ts. */
 export const SEARCH_TITLE = `Search | ${SITE}`
 
+/** The archive index — the old Blogger site, rehosted. Twin of ARCHIVE_TITLE in
+ *  src/lib/pageTitle.ts. */
+export const ARCHIVE_TITLE = `Archive | ${SITE}`
+
+/** One archive post. Twin of archiveTitle() in src/lib/pageTitle.ts. */
+export function archiveTitle(title) {
+  return `${plainTitle(title)} | ${SITE}`
+}
+
 /** Twin of plainTitle() in src/lib/pageTitle.ts. A headline may carry inline
  *  Markdown for emphasis on the page; a tab and a search result want the words. */
 export function plainTitle(md) {

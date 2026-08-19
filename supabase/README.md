@@ -22,6 +22,7 @@ Supabase dashboard → SQL Editor → paste each file → Run, in numerical orde
 | `005_home.sql` | `home_content` (one row: badge, intro, tools heading) and `tools` — the home page, made editable. Seeds today's wording, so applying it changes nothing a visitor sees. |
 | `006_feedback.sql` | The `feedback` table: the footer form's inbox. No insert policy for anyone — see below. |
 | `007_comments.sql` | The `comments` table, the moderation queue, and `comments_public` — the view that drops the email. |
+| `008_archive.sql` | `archive_posts` and `archive_comments`: the old Blogger site, rehosted. Tables and policies only — the 229 posts are loaded separately, below. |
 
 `is_admin()` sits in the second file rather than the first, which looks
 back-to-front until you try it the other way round: its body reads
@@ -66,6 +67,60 @@ is readable and writable by anyone holding the anon key, which is everyone.
   endpoint and skip the form.
 - Columns that must never be public (a commenter's email) are dropped by a
   **view**, not a policy. RLS filters rows, not columns.
+
+## Loading the archive
+
+`008_archive.sql` creates the tables. The **rows** are not in it, and cannot be:
+229 posts and 3,206 comments come to 10MB of INSERTs, which is more than the SQL
+Editor will take in one paste. They are loaded with `psql` instead.
+
+```sh
+# 1. Tables, index and policies — SQL Editor, as usual.
+#    supabase/008_archive.sql
+
+# 2. The rows. Supabase → Connect → Session pooler gives the URI; it wants the
+#    database password, not an API key.
+gunzip -c supabase/data/archive_seed.sql.gz | psql "postgresql://…"
+```
+
+It is one transaction, so it either all lands or none of it does. Then check:
+
+```sql
+select count(*) from public.archive_posts;                       -- expect 229
+select count(*) from public.archive_comments;                    -- expect 3206
+select min(published_at)::date, max(published_at)::date from public.archive_posts;
+-- expect 2000-08-27 (a backdated post) and 2022-11-03
+```
+
+**Re-running it is safe, and expected.** Every statement is keyed on Blogger's
+own entry id with `on conflict do update`, so applying it again refreshes the
+text without duplicating a row. ⚠ It deliberately does NOT touch `note` — that
+column holds what Kevin wrote about a post afterwards, which is the whole reason
+the archive is editable, and an import must never eat it.
+
+### Regenerating the seed
+
+The source is the Google Takeout export, not this repo:
+
+```sh
+python3 scripts/import-archive.py "~/Downloads/Takeout/Blogger/Blogs/chokka blog/feed.atom"
+gzip -9 -kf supabase/data/archive_seed.sql
+```
+
+The uncompressed file is git-ignored; the `.gz` beside it is committed, so the
+archive can be restored without going back to Takeout. The importer sanitises
+every post and comment on the way through — scripts and event handlers are gone
+before a row is written, which is what makes it safe to render the archive as
+HTML — and it refuses to write a short or unbalanced file rather than emit a
+partial archive.
+
+### The deploy does not depend on this
+
+The prerenderer treats a missing `archive_posts` as an empty section and warns,
+rather than failing the build. So the code and the data can arrive in either
+order without taking the site down — see `fetchOptionalTable` in
+`scripts/prerender.mjs`. The handover of the old blogspot URLs is a separate
+runbook: `docs/blogger-handover.md`.
 
 ## The public write path
 

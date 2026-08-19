@@ -21,6 +21,7 @@
 export type PageId =
   | 'home'
   | 'blog'
+  | 'archive'
   | 'search'
   | 'admin'
   | 'login'
@@ -29,12 +30,25 @@ export type PageId =
 export const PAGE_PATHS: Record<PageId, string> = {
   home: '/',
   blog: '/blog',
+  archive: '/archive',
   search: '/search',
   admin: '/admin',
   login: '/login',
 }
 
 const POST_PREFIX = PAGE_PATHS.blog + '/'
+const ARCHIVE_PREFIX = PAGE_PATHS.archive + '/'
+
+/**
+ * An archive post's address is Blogger's own: `YYYY/MM/slug`.
+ *
+ * ⚠ THE DATE IS PART OF THE PATH ON PURPOSE. It is what makes every old
+ * blogspot URL map to its replacement by concatenation — `/2015/03/x.html`
+ * becomes `/archive/2015/03/x` — with no lookup table on the Blogger side,
+ * which is all a theme template can do. It also avoids a collision: two slugs
+ * ('in-other-news', 'playing-long-game') were reused across years.
+ */
+const ARCHIVE_PATH = /^\d{4}\/\d{2}\/[a-z0-9\-_.]+$/
 
 /** Longest path first, so a nested route is matched before `/`. */
 const PATH_TO_PAGE: [string, PageId][] = (Object.entries(PAGE_PATHS) as [PageId, string][])
@@ -45,6 +59,8 @@ export interface RouteState {
   page: PageId
   /** The post's slug on `/blog/<slug>`, else null. */
   postSlug: string | null
+  /** The archive post's `YYYY/MM/slug` on `/archive/<path>`, else null. */
+  archivePath: string | null
   /**
    * True when the path matched nothing. Vercel's catch-all rewrite answers 200
    * for every path (so a post published since the last prerender still works),
@@ -62,7 +78,17 @@ function trimPath(pathname: string): string {
 /** Resolve a pathname to the page it renders. */
 export function parseRoute(pathname: string): RouteState {
   const path = trimPath(pathname)
-  const base: RouteState = { page: 'home', postSlug: null, notFound: false }
+  const base: RouteState = { page: 'home', postSlug: null, archivePath: null, notFound: false }
+
+  if (path.startsWith(ARCHIVE_PREFIX)) {
+    // `.html` is accepted and dropped rather than 404'd. Blogger's theme can
+    // only concatenate strings, so the redirect it emits keeps the extension;
+    // vercel.json 308s that form to the clean one, and this is what makes the
+    // same URL work in dev, in tests, and if the redirect is ever mis-typed.
+    const rest = path.slice(ARCHIVE_PREFIX.length).replace(/\.html$/, '')
+    if (ARCHIVE_PATH.test(rest)) return { ...base, page: 'archive', archivePath: rest }
+    return { ...base, page: 'archive', notFound: true }
+  }
 
   if (path.startsWith(POST_PREFIX)) {
     const slug = path.slice(POST_PREFIX.length)
@@ -115,6 +141,11 @@ export function pathForSearch(term?: string): string {
  */
 export function searchTermFromUrl(search: string): string {
   return new URLSearchParams(search).get(SEARCH_PARAM)?.trim() ?? ''
+}
+
+/** The permalink for one archive post, from its `YYYY/MM/slug`. */
+export function pathForArchive(path: string): string {
+  return ARCHIVE_PREFIX + path
 }
 
 /** The canonical path for a page. */

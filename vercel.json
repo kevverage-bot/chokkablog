@@ -6,6 +6,9 @@
   "redirects": [
     { "source": "/insights", "destination": "/blog", "permanent": true },
     { "source": "/insights/:slug", "destination": "/blog/:slug", "permanent": true },
+    { "source": "/archive/(.*)\\.html", "destination": "/archive/$1", "permanent": true },
+    { "source": "/(\\d{4})/(\\d{2})/(.*)\\.html", "destination": "/archive/$1/$2/$3", "permanent": true },
+    { "source": "/(\\d{4})/(\\d{2})/(.*)", "destination": "/archive/$1/$2/$3", "permanent": true },
     {
       "source": "/",
       "has": [{ "type": "host", "value": "www.chokkablog.com" }],
