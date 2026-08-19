@@ -134,7 +134,7 @@ function App() {
     if (notFound) return <NotFoundPage onNavigate={setPage} />
     switch (page) {
       case 'home':
-        return <HomePage />
+        return <HomePage onSelect={selectPost} onNavigate={setPage} />
       case 'blog':
         return postSlug
           ? <PostPage slug={postSlug} onNavigate={setPage} onSelect={selectPost} />

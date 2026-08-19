@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { HomePage } from '../pages/HomePage'
 import { FALLBACK_HOME_CONTENT, FALLBACK_TOOLS } from '../constants/home'
+import { newestPublished } from '../components/LatestPost'
+import type { Post } from '../hooks/usePosts'
 
 /**
  * The home page reads its words from the database, which leaves it with two
@@ -34,6 +36,8 @@ function fakeTable(result: { data: unknown; error: { message: string } | null } 
   return chain
 }
 
+const noop = () => {}
+
 const results: Record<string, { data: unknown; error: { message: string } | null }> = {}
 
 vi.mock('../lib/supabase', () => ({
@@ -47,11 +51,19 @@ beforeEach(() => {
   results.tools = ERROR
   // The sign-up box reads its wording too, and falls back when it cannot.
   results.subscribe_content = ERROR
+  results.insights = { data: [], error: null }
 })
+
+/** Only the fields the front page reads; the rest of Post is irrelevant here. */
+const post = (over: Partial<Post>): Post => ({
+  id: 'p', slug: 'a-post', headline: 'A post', short_title: '', summary: 'What it says.',
+  body: '', footer: '', published: true, published_at: '2026-08-01T00:00:00Z',
+  created_at: '2026-08-01T00:00:00Z', ...over,
+} as Post)
 
 describe('HomePage', () => {
   it('falls back to the built-in wording when the tables are not there yet', async () => {
-    render(<HomePage />)
+    render(<HomePage onSelect={noop} onNavigate={noop} />)
 
     expect(await screen.findByText(FALLBACK_HOME_CONTENT.badge)).toBeTruthy()
     expect(screen.getByText(FALLBACK_HOME_CONTENT.intro)).toBeTruthy()
@@ -70,7 +82,7 @@ describe('HomePage', () => {
       error: null,
     }
 
-    render(<HomePage />)
+    render(<HomePage onSelect={noop} onNavigate={noop} />)
 
     expect(await screen.findByText('Now with actual writing.')).toBeTruthy()
     expect(screen.getByText('The tools')).toBeTruthy()
@@ -88,7 +100,7 @@ describe('HomePage', () => {
     }
     results.tools = { data: [], error: null }
 
-    render(<HomePage />)
+    render(<HomePage onSelect={noop} onNavigate={noop} />)
 
     await waitFor(() => expect(screen.getByText('Just the words.')).toBeTruthy())
     expect(screen.queryByText('Tools')).toBeNull()
@@ -102,12 +114,78 @@ describe('HomePage', () => {
       error: null,
     }
 
-    render(<HomePage />)
+    render(<HomePage onSelect={noop} onNavigate={noop} />)
 
     expect(await screen.findByText('Work in progress')).toBeTruthy()
     // Scoped to the tools grid. The sign-up box below carries a link to the
     // privacy notice, which is not a dead end and not what this is about.
     const card = screen.getByText('Half-built').closest('div')!
     expect(card.querySelector('a')).toBeNull()
+  })
+})
+
+
+/**
+ * The latest-post block.
+ *
+ * ⚠ The trap it exists to avoid: RLS returns UNPUBLISHED rows to an admin, so on
+ * Kevin's own browser the newest row is often a half-written draft. Announcing
+ * one as "the latest post" on the front page would look right to him and wrong
+ * to everybody else — the worst shape a bug can have.
+ */
+describe('newestPublished', () => {
+  it('ignores drafts, however recent', () => {
+    const latest = newestPublished([
+      post({ id: 'draft', headline: 'Half-written', published: false, published_at: null }),
+      post({ id: 'live', headline: 'Published', published_at: '2026-07-01T00:00:00Z' }),
+    ])
+    expect(latest?.id).toBe('live')
+  })
+
+  it('ignores a published post with no address to link to', () => {
+    expect(newestPublished([post({ slug: null })])).toBeNull()
+  })
+
+  it('sorts by when it was published, not by the order it was given', () => {
+    // The hub's order is an editorial arrangement; a post published today after
+    // being drafted last month is still the latest.
+    const latest = newestPublished([
+      post({ id: 'older', published_at: '2026-01-01T00:00:00Z' }),
+      post({ id: 'newer', published_at: '2026-08-18T00:00:00Z' }),
+      post({ id: 'middle', published_at: '2026-04-01T00:00:00Z' }),
+    ])
+    expect(latest?.id).toBe('newer')
+  })
+
+  it('is null when nothing has been published yet', () => {
+    expect(newestPublished([])).toBeNull()
+    expect(newestPublished([post({ published: false })])).toBeNull()
+  })
+})
+
+describe('HomePage latest post', () => {
+  it('links the newest published post, and never a draft', async () => {
+    results.insights = {
+      data: [
+        post({ id: 'd', slug: 'secret', headline: 'Unfinished thought', published: false, published_at: null }),
+        post({ id: 'l', slug: 'gers-2026', headline: 'GERS 2026', published_at: '2026-08-18T00:00:00Z' }),
+      ],
+      error: null,
+    }
+
+    render(<HomePage onSelect={noop} onNavigate={noop} />)
+
+    const link = await screen.findByRole('link', { name: 'GERS 2026' })
+    expect(link.getAttribute('href')).toBe('/blog/gers-2026')
+    expect(screen.queryByText('Unfinished thought')).toBeNull()
+  })
+
+  it('shows nothing at all before there is a post', async () => {
+    render(<HomePage onSelect={noop} onNavigate={noop} />)
+
+    // The badge proves the page rendered; the absent heading proves the block
+    // stayed away rather than announcing an empty section.
+    expect(await screen.findByText(FALLBACK_HOME_CONTENT.badge)).toBeTruthy()
+    expect(screen.queryByText('Latest post')).toBeNull()
   })
 })

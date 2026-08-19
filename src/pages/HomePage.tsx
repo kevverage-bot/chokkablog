@@ -2,6 +2,7 @@ import { COLORS } from '../constants/colors'
 import { FALLBACK_HOME_CONTENT, FALLBACK_TOOLS } from '../constants/home'
 import { Container } from '../components/Container'
 import { SubscribeBox } from '../components/SubscribeBox'
+import { LatestPost } from '../components/LatestPost'
 import { PageLoading } from '../components/PageLoading'
 import { RichText } from '../components/RichText'
 import { HOME_TITLE } from '../lib/pageTitle'
@@ -20,7 +21,12 @@ import { useTools, type ToolCard as ToolCardData } from '../hooks/useTools'
  * showing an empty front page. A read that *succeeds* and returns nothing is
  * rendered as nothing, because that was somebody's decision in Admin.
  */
-export function HomePage() {
+export function HomePage({ onSelect, onNavigate }: {
+  /** Open a post. Passed down to the latest-post block, which is the only thing
+   *  on this page that links to one. */
+  onSelect: (slug: string) => void
+  onNavigate: (page: 'blog') => void
+}) {
   const { content, loading: loadingText, failed: textFailed } = useHomeContent()
   const { tools, loading: loadingTools, failed: toolsFailed } = useTools()
 
@@ -61,6 +67,12 @@ export function HomePage() {
           <RichText text={intro} id="home-intro" />
         </div>
       )}
+
+      {/* Between the standfirst and the sign-up: what has been written, then the
+          offer to be told about the next one. Renders nothing until there is a
+          published post, so it costs the front page nothing while the blog is
+          still empty. */}
+      <LatestPost onSelect={onSelect} onNavigate={onNavigate} />
 
       {/* ⚠ ABOVE the tools grid, not below it. The grid is four outbound links to
           other sites; anything under it is being offered to a reader who has

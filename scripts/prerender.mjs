@@ -301,6 +301,8 @@ async function main() {
   // an admin has published without an address cannot have a URL to write.
   const posts = postRows.filter((p) => p.slug && p.published)
   const home = homeRows[0] ?? { badge: '', intro: '', tools_heading: 'Tools' }
+  // The newest published post, for the front page's one link into the writing.
+  const latest = posts[0] ?? null
   // Newest first, and never a row without an address to write it to.
   const archive = archiveRows.filter((a) => a.path)
   const w = makeWriter(template, hasCard)
@@ -351,6 +353,23 @@ async function main() {
     h1: HOME_TITLE,
     intro: stripMarkdown(home.intro),
     sections: [
+      // ⚠ The newest post, IN THE SNAPSHOT and not only in the app. This is the
+      // one internal link from the front page to the current writing, so a
+      // crawler that never runs the JavaScript still finds its way from `/` to
+      // the thing most worth indexing. `posts` arrives ordered
+      // published_at.desc.nullslast and filtered to published rows with a slug,
+      // so [0] is the latest — there is no draft here to exclude, because the
+      // anon key never saw one. Mirrors newestPublished() in
+      // src/components/LatestPost.tsx.
+      latest
+        ? {
+            heading: 'Latest post',
+            html:
+              `<p><a href="/blog/${escapeHtml(latest.slug)}">`
+              + `${escapeHtml(plainTitle(latest.headline))}</a></p>`
+              + (postDescription(latest) ? `<p>${escapeHtml(postDescription(latest))}</p>` : ''),
+          }
+        : null,
       { html: `<p><a href="/blog">Read the blog</a></p>` },
       toolList ? { heading: home.tools_heading || 'Tools', html: toolList } : null,
     ].filter(Boolean),
