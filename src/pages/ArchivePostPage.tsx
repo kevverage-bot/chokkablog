@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { COLORS } from '../constants/colors'
 import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
-import { RichText } from '../components/RichText'
+import { RichText, InlineText } from '../components/RichText'
 import { ArchiveComments } from '../components/ArchiveComments'
 import { SubscribeBox } from '../components/SubscribeBox'
 import { useArchivePost } from '../hooks/useArchive'
 import { formatPostDate, isoDate, yearOf } from '../lib/dates'
-import { pathForPage, plainClick } from '../lib/routes'
+import { pathForPage, plainClick, searchTermFromUrl } from '../lib/routes'
 import { archiveTitle, useDocumentTitle } from '../lib/pageTitle'
+import { tokenize } from '../lib/search'
+import { firstMark, markMatchesInDom } from '../lib/markDom'
 
 /**
  * One post from the old Blogger site, at /archive/YYYY/MM/slug.
@@ -33,8 +35,58 @@ export function ArchivePostPage({ path, onNavigate }: {
 }) {
   const { post, loading } = useArchivePost(path)
 
+  /**
+   * One-shot search term, exactly as PostPage reads it — arriving from a search
+   * result, the words that matched are marked so it is obvious why this page
+   * came back. Read at render rather than in an effect, because the post loads
+   * asynchronously and the term is stripped from the URL below.
+   *
+   * ⚠ Archive posts had NO highlighting at all until this, which made them the
+   * worst case rather than an edge case: they are 229 of the site's 235 pages
+   * and where most search results land. Searching for "Murphy" put a reader
+   * 21,911 characters into a GERS post with nothing to show why.
+   */
+  const highlight = useMemo(() => {
+    const t = tokenize(searchTermFromUrl(window.location.search))
+    return t.length > 0 ? t : undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path])
+
+  /** The injected body, so the marks can be put into it after render. */
+  const bodyRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => { window.scrollTo({ top: 0 }) }, [path])
   useDocumentTitle(post ? archiveTitle(post.title) : null)
+
+  /**
+   * Take the term back off the URL once read — same reasoning as PostPage: a
+   * reader who copies the address bar should not share this post with a
+   * stranger's search terms attached. replaceState, so Back still returns to the
+   * results.
+   */
+  useEffect(() => {
+    if (!searchTermFromUrl(window.location.search)) return
+    window.history.replaceState(null, '', window.location.pathname)
+  }, [path])
+
+  /**
+   * Mark the matches in the injected HTML.
+   *
+   * ⚠ AFTER the body exists, and keyed on the post as well as the terms: React
+   * writes that subtree with dangerouslySetInnerHTML, so on the first render the
+   * ref is attached but empty. `post?.html` in the deps is what makes this run
+   * once the content is actually there.
+   */
+  useEffect(() => {
+    if (!highlight || !post) return
+    const count = markMatchesInDom(bodyRef.current, highlight)
+    // Scroll to the first one. Without this a reader lands at the top of a
+    // 25,000-character post and has to hunt for the yellow, which is most of the
+    // work the highlighting was meant to save.
+    if (count > 0) {
+      firstMark(bodyRef.current)?.scrollIntoView({ block: 'center', behavior: 'auto' })
+    }
+  }, [highlight, post])
 
   if (loading) return <PageLoading />
   if (!post) return <NotFound onNavigate={onNavigate} />
@@ -62,7 +114,7 @@ export function ArchivePostPage({ path, onNavigate }: {
             className="text-3xl sm:text-4xl font-extrabold leading-tight m-0"
             style={{ color: COLORS.ink, letterSpacing: '-1px' }}
           >
-            {post.title}
+            <InlineText text={post.title} highlight={highlight} id={post.id} />
           </h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs" style={{ color: COLORS.faint }}>
             <time dateTime={isoDate(post.published_at)} className="num">
@@ -87,6 +139,7 @@ export function ArchivePostPage({ path, onNavigate }: {
 
         {/* Sanitised at import, never in the browser — see the note above. */}
         <div
+          ref={bodyRef}
           className="archive-html"
           style={{ color: COLORS.ink }}
           dangerouslySetInnerHTML={{ __html: post.html }}

@@ -129,6 +129,11 @@ export function useArchivePost(path: string) {
  * Ranking is the index's own weighting (title, then body) — see the generated
  * `fts` column in supabase/008_archive.sql, including why labels are not in it.
  */
+/** PostgREST's answer when the function is not in the schema cache yet. */
+function isMissingFunction(message: string): boolean {
+  return /Could not find the function|schema cache|does not exist/i.test(message)
+}
+
 export function useArchiveSearch(term: string, limit = 25) {
   const query = term.trim()
   // Two characters is where the index stops being useful and starts returning
@@ -144,13 +149,32 @@ export function useArchiveSearch(term: string, limit = 25) {
     // Debounced: this one leaves the browser, unlike the blog's search, so it
     // waits for a pause in typing rather than firing on every keystroke.
     const id = setTimeout(async () => {
-      const { data, error } = await supabase
-        .from('archive_posts')
-        .select(LIST_COLUMNS)
-        .textSearch('fts', query, { type: 'websearch' })
-        .order('published_at', { ascending: false })
-        .limit(limit)
+      // ⚠ AN RPC, NOT A SELECT, AND THE REASON IS THE SNIPPET. The stored
+      // `excerpt` is a fixed opening extract, so a hit deep in a long post
+      // showed the reader its first paragraph with nothing marked in it —
+      // searching for "Murphy" returned a GERS post whose only mention was
+      // 21,911 characters in. `search_archive` returns a ts_headline cut around
+      // the match instead, marked by the same tsquery that found it, so
+      // stemming highlights correctly. See supabase/011_archive_search.sql.
+      const { data, error } = await supabase.rpc('search_archive', { q: query, lim: limit })
       if (cancelled) return
+
+      // ⚠ FALLS BACK TO THE PLAIN SELECT, and this is not belt-and-braces: on
+      // the deploy that lands before the migration is run, the function does not
+      // exist and every search would return nothing at all. Search going quiet
+      // is a much worse failure than search showing the old, blunter excerpt.
+      if (error && isMissingFunction(error.message)) {
+        const legacy = await supabase
+          .from('archive_posts')
+          .select(LIST_COLUMNS)
+          .textSearch('fts', query, { type: 'websearch' })
+          .order('published_at', { ascending: false })
+          .limit(limit)
+        if (cancelled) return
+        setResult({ query, hits: legacy.error ? [] : ((legacy.data ?? []) as ArchiveSummary[]) })
+        return
+      }
+
       // A malformed query (a lone quote, mid-typing) comes back as a 400 from
       // Postgres rather than an outage: show nothing and wait for the next
       // keystroke. Recorded against this query either way, so it settles.

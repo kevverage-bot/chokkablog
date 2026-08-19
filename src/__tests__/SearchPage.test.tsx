@@ -31,7 +31,11 @@ const POSTS = [
 const ARCHIVE = [
   {
     path: '2015/03/oil-and-the-deficit', title: 'Oil and the deficit',
-    excerpt: 'What the 2015 numbers actually showed about oil.',
+    // ⚠ The excerpt deliberately does NOT contain the word the tests search for.
+    // That is the bug this whole path exists to fix: the stored excerpt is a
+    // fixed opening extract, so a match deep in the post had nothing to show.
+    excerpt: 'What the 2015 numbers actually showed.',
+    body: 'A long way down the page, Richard Murphy said something about oil.',
     published_at: '2015-03-04T09:00:00Z', labels: ['GERS'], comment_count: 12,
   },
 ]
@@ -63,6 +67,30 @@ vi.mock('../lib/supabase', () => {
   return {
     supabase: {
       from: (table: string) => make(table === 'archive_posts' ? ARCHIVE : POSTS),
+      /**
+       * Stands in for public.search_archive (supabase/011_archive_search.sql).
+       * Two things about the real one that the page's behaviour depends on, and
+       * which this therefore reproduces: it returns a snippet cut around the
+       * MATCH rather than the stored opening excerpt, and it marks the matched
+       * words with sentinels for the browser to turn into <mark> elements.
+       */
+      rpc: (name: string, args: { q: string; lim?: number }) => {
+        if (name !== 'search_archive') throw new Error(`unexpected rpc: ${name}`)
+        const words = args.q.toLowerCase().split(/\s+/).filter(Boolean)
+        const hits = ARCHIVE
+          .filter((row) => {
+            const hay = JSON.stringify(row).toLowerCase()
+            return words.every((w) => hay.includes(w))
+          })
+          .map((row) => ({
+            ...row,
+            excerpt: words.reduce(
+              (text, w) => text.replace(new RegExp(`(${w})`, 'gi'), '[hl]$1[/hl]'),
+              row.body ?? row.excerpt,
+            ),
+          }))
+        return Promise.resolve({ data: hits, error: null })
+      },
     },
   }
 })
@@ -192,5 +220,40 @@ describe('SearchPage', () => {
     await waitFor(() => {
       expect(window.location.pathname + window.location.search).toBe('/search')
     })
+  })
+})
+
+
+/**
+ * THE SNIPPET.
+ *
+ * Searching the archive for "Murphy" returned "GERS 2021 - So What?" — correctly
+ * — and showed the reader its opening paragraph about the Chief Statistician,
+ * with nothing marked. The match was 21,911 characters into a 25,814 character
+ * post, and the list only ever fetched the stored 240-character excerpt. These
+ * pin the fix: the snippet comes from the match, and the marks come from
+ * Postgres rather than from the reader's literal words.
+ */
+describe('archive snippets show why the post matched', () => {
+  it('shows the text around the match, not the post\'s opening lines', async () => {
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
+    await userEvent.type(box(), 'Murphy')
+
+    expect(await screen.findByText(/Richard/)).toBeTruthy()
+    // The stored excerpt, which contains no "Murphy", must not be what is shown.
+    expect(screen.queryByText(/the 2015 numbers actually showed/)).toBeNull()
+  })
+
+  it('marks the matched words, and marks nothing else', async () => {
+    render(<SearchPage onNavigate={noop} onSelect={noop} onSelectArchive={noop} />)
+    await userEvent.type(box(), 'Murphy')
+
+    const marks = await screen.findAllByText('Murphy', { selector: 'mark' })
+    expect(marks.length).toBeGreaterThan(0)
+    // The sentinels are an implementation detail of the wire format. If one
+    // reaches the page as literal text, the split failed and the reader sees
+    // "[hl]" in their results.
+    expect(document.body.textContent).not.toContain('[hl]')
+    expect(document.body.textContent).not.toContain('[/hl]')
   })
 })

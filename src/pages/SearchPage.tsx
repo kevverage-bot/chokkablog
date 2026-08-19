@@ -3,7 +3,8 @@ import { COLORS, PREVIEW_OUTLINE } from '../constants/colors'
 import { Container } from '../components/Container'
 import { InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
-import { highlightText } from '../lib/highlight'
+import { highlightText, MARK_STYLE } from '../lib/highlight'
+import { splitSnippet } from '../lib/archiveSnippet'
 import { usePosts } from '../hooks/usePosts'
 import { useArchiveSearch, type ArchiveSummary } from '../hooks/useArchive'
 import { searchPosts, type PostHit } from '../lib/postSearch'
@@ -263,10 +264,28 @@ function ArchiveResult({ hit, tokens, onSelect }: {
       </a>
       {hit.excerpt && (
         <p className="text-[15px] leading-relaxed mt-1 mb-2 max-w-2xl" style={{ color: COLORS.muted }}>
-          {/* Highlighted with the reader's own words, which Postgres may not have
-              matched literally — it stems, so "borrowing" can find "borrow". A
-              hit with nothing marked in it is that, not a bug. */}
-          {highlightText(hit.excerpt, tokens)}
+          {/* ⚠ MARKED BY POSTGRES, NOT BY US, and that is the point. The marks
+              come from the same tsquery that matched, so a search for
+              "borrowing" highlights "borrow" — which highlighting the reader's
+              literal words here never could. They arrive as sentinels and are
+              turned into <mark> elements, so nothing is injected as markup.
+              See src/lib/archiveSnippet.ts.
+
+              A row with no sentinels renders as plain text: that is the
+              pre-migration fallback in useArchiveSearch showing the old stored
+              excerpt, not a failure. */}
+          {(() => {
+            const parts = splitSnippet(hit.excerpt)
+            // No sentinels at all means this row came from the pre-migration
+            // fallback — the old stored excerpt. Highlight it the old way rather
+            // than showing it flat, so the deploy window is no worse than before.
+            if (!parts.some((p) => p.hit)) return highlightText(hit.excerpt, tokens)
+            return parts.map((part, i) => (
+              part.hit
+                ? <mark key={i} style={MARK_STYLE}>{part.text}</mark>
+                : <span key={i}>{part.text}</span>
+            ))
+          })()}
         </p>
       )}
       <div className="text-xs num" style={{ color: COLORS.faint }}>
