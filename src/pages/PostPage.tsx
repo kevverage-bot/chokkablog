@@ -5,6 +5,7 @@ import { PageLoading } from '../components/PageLoading'
 import { RichText, RichTextFootnotes, InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
 import { PostComments } from '../components/PostComments'
+import { SubscribeBox } from '../components/SubscribeBox'
 import { usePosts, type Post } from '../hooks/usePosts'
 import { formatPostDate, isoDate } from '../lib/dates'
 import { pathForPost, pathForPage, plainClick, searchTermFromUrl } from '../lib/routes'
@@ -127,6 +128,11 @@ export function PostPage({ slug, onNavigate, onSelect }: {
 
         <RichTextFootnotes text={post.body} id={post.id} highlight={highlight} />
       </article>
+
+      {/* ABOVE the comments, not below them. Somebody who has just finished
+          reading is at the point of deciding whether they want more; the same box
+          under a thread of forty comments is one nobody scrolls to. */}
+      {post.published && <SubscribeBox />}
 
       {/* Only on a published post. A draft is visible to its author alone, so a
           comment box on one could only ever be the author talking to themselves —

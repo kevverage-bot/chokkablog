@@ -4,13 +4,15 @@ import { describe, it, expect } from 'vitest'
 // this file needs to assert on anyway.
 import FEEDBACK_FN from '../../supabase/functions/submit-feedback/index.ts?raw'
 import COMMENT_FN from '../../supabase/functions/submit-comment/index.ts?raw'
+import SUBSCRIBE_FN from '../../supabase/functions/subscribe/index.ts?raw'
 import GUARD from '../../supabase/functions/_shared/guard.ts?raw'
 import { FEEDBACK_LIMITS, validateFeedback, isPlausibleEmail } from '../lib/feedback'
 import { COMMENT_LIMITS, validateComment } from '../lib/comments'
+import { SUBSCRIBE_LIMITS, validateSubscribe } from '../lib/subscribe'
 import { threadComments, type PublicComment } from '../hooks/useComments'
 
 /**
- * The two public write paths are the only places on this site where a stranger's
+ * The three public write paths are the only places on this site where a stranger's
  * input reaches the database, so the things that constrain them are worth a test
  * of their own.
  *
@@ -22,6 +24,19 @@ import { threadComments, type PublicComment } from '../hooks/useComments'
  * place only, the symptom is either a form that rejects what the server would
  * have taken, or one that accepts what the server then refuses.
  */
+
+/**
+ * The source with its comments removed.
+ *
+ * These files explain themselves at length, so a bare `toContain` on the raw
+ * text asserts on the prose as much as the code — and a comment SAYING a
+ * function does not do something would satisfy a test checking that it does not.
+ */
+function codeOnly(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+}
 
 /** Pull `key: 1234` out of the function's LIMITS literal. */
 function limitIn(source: string, key: string): number {
@@ -41,6 +56,10 @@ describe('the browser and the Edge Function agree on the limits', () => {
     expect(limitIn(COMMENT_FN, 'body')).toBe(COMMENT_LIMITS.body)
     expect(limitIn(COMMENT_FN, 'name')).toBe(COMMENT_LIMITS.name)
     expect(limitIn(COMMENT_FN, 'email')).toBe(COMMENT_LIMITS.email)
+  })
+
+  it('subscribe', () => {
+    expect(limitIn(SUBSCRIBE_FN, 'email')).toBe(SUBSCRIBE_LIMITS.email)
   })
 
   it('the minimum time on a form', () => {
@@ -167,5 +186,101 @@ describe('threadComments', () => {
   it('keeps the order it was given', () => {
     const threads = threadComments([base({ id: 'a' }), base({ id: 'b' }), base({ id: 'c' })])
     expect(threads.map((t) => t.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+
+/**
+ * THE SIGN-UP PATH.
+ *
+ * These are not style assertions. Each one pins a decision that was made by
+ * testing the live Kit account on 19 Aug 2026, and every one of them is silent
+ * when broken — the form keeps working, and what changes is whether people
+ * consented, whether the record survives, or what a stranger can learn.
+ */
+describe('subscribe keeps the properties the consent record depends on', () => {
+  it('posts at the FORM endpoint, never at the subscribers API', () => {
+    // ⚠ THE WHOLE DOUBLE OPT-IN RESTS ON THIS ONE URL. Kit's documented
+    // POST /v4/subscribers adds people as `active` and sends nothing; the form's
+    // own submission endpoint holds them unconfirmed and sends the confirmation
+    // email. Both were tried against the live account — the first added an
+    // address silently, the second sent the email. Swapping this URL for the
+    // "proper" API would turn every sign-up into single opt-in with no other
+    // visible change.
+    expect(SUBSCRIBE_FN).toMatch(/https:\/\/app\.kit\.com\/forms\/\$\{FORM_ID\}\/subscriptions/)
+    expect(codeOnly(SUBSCRIBE_FN)).not.toContain('api.kit.com/v4/subscribers')
+  })
+
+  it('needs no Kit credential at all', () => {
+    // The form endpoint is unauthenticated, which is why there is no Kit key in
+    // Supabase to leak or rotate. A key appearing here means someone moved to
+    // the authenticated API — see above for what that costs.
+    expect(codeOnly(SUBSCRIBE_FN)).not.toMatch(/KIT_API_KEY|X-Kit-Api-Key/)
+  })
+
+  it('records the consent BEFORE handing over to Kit', () => {
+    // The row is the thing we are obliged to be able to produce; the handover is
+    // the thing that can be retried. Reversed, a Kit outage loses the evidence
+    // that somebody asked.
+    const code = codeOnly(SUBSCRIBE_FN)
+    expect(code.indexOf(".from('subscribers')")).toBeLessThan(code.indexOf('app.kit.com'))
+  })
+
+  it('lowercases the address, matching the check constraint on the column', () => {
+    // 009_subscribers.sql refuses a row where email <> lower(email), so this is
+    // not a nicety — without it the insert fails outright.
+    expect(SUBSCRIBE_FN).toMatch(/\.toLowerCase\(\)/)
+  })
+
+  it('upserts, so a repeat sign-up is not an error', () => {
+    expect(SUBSCRIBE_FN).toMatch(/onConflict: 'email'/)
+  })
+
+  it('does not overwrite an existing row\'s status', () => {
+    // Someone already 'confirmed' must not be demoted to 'pending' for filling
+    // the box in again. The upsert payload therefore names no status at all.
+    const upsert = SUBSCRIBE_FN.slice(
+      SUBSCRIBE_FN.indexOf('.upsert('),
+      SUBSCRIBE_FN.indexOf('onConflict'),
+    )
+    expect(upsert).not.toMatch(/status:/)
+  })
+
+  it('never tells a stranger whether an address is already on the list', () => {
+    // ⚠ Anyone can POST here with anyone else's address. A reply distinguishing
+    // a new sign-up from an existing one is an oracle for testing whether a
+    // given person reads chokkablog. The success response carries nothing but ok.
+    expect(SUBSCRIBE_FN).toMatch(/return json\(\{ ok: true \}\)/)
+    expect(codeOnly(SUBSCRIBE_FN)).not.toMatch(/already/i)
+  })
+
+  it('tells the truth when the handover failed', () => {
+    // "Check your inbox" when no email is coming costs the reader the sign-up
+    // and looks like their mistake. The row is kept and flagged instead.
+    expect(SUBSCRIBE_FN).toMatch(/status: 'failed'/)
+  })
+
+  it('does not wait on Kit for ever', () => {
+    expect(SUBSCRIBE_FN).toMatch(/AbortSignal\.timeout/)
+  })
+})
+
+describe('validateSubscribe', () => {
+  it('requires an address — it is the entire point of the box', () => {
+    expect(validateSubscribe('   ')).toMatch(/enter your email/i)
+  })
+
+  it('rejects one that is not plausibly an address', () => {
+    expect(validateSubscribe('kevin')).toMatch(/does not look right/i)
+    expect(validateSubscribe('kevin@example.com')).toBeNull()
+  })
+
+  it('takes a plus-addressed alias, which is a real address people use', () => {
+    expect(validateSubscribe('kev+chokka@example.com')).toBeNull()
+  })
+
+  it('rejects an over-long one', () => {
+    expect(validateSubscribe('a'.repeat(SUBSCRIBE_LIMITS.email) + '@example.com'))
+      .toMatch(/too long/i)
   })
 })

@@ -124,11 +124,11 @@ runbook: `docs/blogger-handover.md`.
 
 ## The public write path
 
-Two Edge Functions, in `functions/`, are the only way a stranger's words reach
-this database: `submit-feedback` (the footer form) and `submit-comment` (beneath a
-post). They share `functions/_shared/guard.ts` — honeypot → time-on-form →
-captcha → rate limit, in that order, so a script that cannot pass the captcha
-never costs a query.
+Three Edge Functions, in `functions/`, are the only way a stranger's words reach
+this database: `submit-feedback` (the footer form), `submit-comment` (beneath a
+post) and `subscribe` (the sign-up box at the foot of a post). They share
+`functions/_shared/guard.ts` — honeypot → time-on-form → captcha → rate limit, in
+that order, so a script that cannot pass the captcha never costs a query.
 
 **Both fail closed.** With no `HCAPTCHA_SECRET` set, the guard refuses every
 write with a 503, because an unprotected public insert is the worse failure. The
@@ -172,6 +172,43 @@ the site** — which is the intended state, not a bug.
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the platform; do
 not set them, and never put the service-role key in this repo or in any `VITE_`
 variable.
+
+### The email sign-up, and the one URL it turns on
+
+`subscribe` records the consent in `public.subscribers` and then hands the address
+to **Kit**, which sends the confirmation email and owns the list.
+
+⚠ **It posts at `https://app.kit.com/forms/<id>/subscriptions`, NOT at Kit's
+API, and that is not an oversight.** Both were tried against the live account on
+19 Aug 2026:
+
+| Route | Result |
+| --- | --- |
+| `POST https://api.kit.com/v4/subscribers` | Added as `state: "active"`. **No email sent.** Double opt-in bypassed. |
+| `POST https://app.kit.com/forms/<id>/subscriptions` | Held unconfirmed, **confirmation email sent**. |
+
+So the form endpoint is the only one that produces a consent record worth having.
+Two things follow, and both are easy to undo by accident:
+
+- **There is no Kit credential anywhere in this project.** That endpoint is
+  unauthenticated. Nothing to set, rotate or leak. Moving to the "proper" API
+  would cost the double opt-in and gain nothing.
+- **The form's own settings own the behaviour.** In Kit → the form → Settings →
+  Confirmation Email: *Send confirmation email* on, *Auto-confirm new
+  subscribers* off. Switching auto-confirm on there would silently make every
+  sign-up single opt-in, with nothing in this repo changed to show for it.
+
+`src/__tests__/publicWrite.test.ts` pins both the URL and the absence of a key.
+
+The form is **9820264** ("Chokkablog Sign Up"). Override with a `KIT_FORM_ID`
+secret if it is ever replaced — no deploy needed, the function reads it at run
+time.
+
+Also note: **`public.subscribers` is the consent record, not the list.** A row
+says somebody asked; Kit knows who actually confirmed, and an unsubscribe made
+through Kit's footer link never reaches this table. `status` stays `'pending'`
+for ever unless something is built to write back. That is documented at length in
+`009_subscribers.sql` and is worth reading before trusting the column.
 
 ## Rebuilding after publishing
 
