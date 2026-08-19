@@ -38,7 +38,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { markdownToHtml, stripMarkdown, clamp, escapeHtml } from './lib/markdown.mjs'
 import {
-  ORIGIN, SITE, AUTHOR, TWITTER, HOME_TITLE, BLOG_TITLE, SEARCH_TITLE, ARCHIVE_TITLE,
+  ORIGIN, SITE, AUTHOR, TWITTER, HOME_TITLE, BLOG_TITLE, SEARCH_TITLE, PRIVACY_TITLE, ARCHIVE_TITLE,
   plainTitle, postTitle, postDescription, archiveTitle,
 } from './lib/seo.mjs'
 
@@ -408,6 +408,38 @@ async function main() {
     h1: 'Search',
     intro: 'Every post, by keyword. Put "quotation marks" around words to match them as a phrase.',
     sections: [{ html: '<p><a href="/blog">All posts</a></p>' }],
+  }))
+
+  // ── Privacy ──
+  // Indexable and in the sitemap, unlike /search: it is a real page with stable
+  // content, and a privacy notice a reader cannot find from a search engine is
+  // one they cannot check before they trust the site with an address.
+  //
+  // ⚠ THE SNAPSHOT IS A SUMMARY, NOT THE NOTICE. The full text lives in
+  // src/pages/PrivacyPage.tsx and is deliberately NOT duplicated here — a second
+  // copy of a legal document is a copy that will one day disagree with the first.
+  // What is repeated below is only the part someone needs while the JavaScript
+  // is still loading: who is responsible, and how to reach them.
+  w.write({
+    path: '/privacy',
+    title: PRIVACY_TITLE,
+    description:
+      `How ${SITE} handles personal data: what the comment form, feedback form ` +
+      'and email sign-up collect, who processes it, and how to have it removed.',
+  }, snapshot({
+    h1: 'Privacy',
+    intro:
+      'chokkablog is written and run by Kevin Hague as an individual, who is the '
+      + 'data controller for the personal data described here.',
+    sections: [{
+      html:
+        '<p>This site sells nothing, advertises nothing, and sets no tracking '
+        + 'cookies. Personal data is collected in three places only — the comment '
+        + 'form, the feedback form and the email sign-up — and in each case only '
+        + 'because you typed something into it.</p>'
+        + '<p>To ask what is held about you, to correct it, or to have it deleted, '
+        + 'write to <a href="mailto:kevin@chokkablog.com">kevin@chokkablog.com</a>.</p>',
+    }],
   }))
 
   // ── One page per post ──

@@ -47,6 +47,13 @@ export function SiteFooter() {
             crawler counts it. The <link rel="alternate"> in index.html is for
             software; this one is for people. */}
         <a href="/rss.xml" className="underline" style={{ color: 'inherit' }}>RSS</a>
+        <span aria-hidden="true">·</span>
+        {/* ⚠ On EVERY page, which is the point: a privacy notice reachable only
+            from the form that collects the data is one nobody can check before
+            deciding to trust the site. A plain link rather than a routed one, as
+            with the feed above — this component takes no navigation prop, and a
+            full load of a page nobody reads twice costs nothing. */}
+        <a href="/privacy" className="underline" style={{ color: 'inherit' }}>Privacy</a>
       </p>
 
       {open && (

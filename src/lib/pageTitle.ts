@@ -49,6 +49,8 @@ export const ARCHIVE_TITLE = `Archive | ${SITE}`
  */
 export const SEARCH_TITLE = `Search | ${SITE}`
 
+export const PRIVACY_TITLE = `Privacy | ${SITE}`
+
 /**
  * Titles this module can produce with no loaded data.
  *
@@ -66,6 +68,7 @@ export const STATIC_PAGE_TITLES: Partial<Record<PageId, string>> = {
   // title still has to match what that file writes, because a reader who
   // refreshes /search would otherwise watch it change.
   search: SEARCH_TITLE,
+  privacy: PRIVACY_TITLE,
   // Not prerendered (tools, not published pages), so there is nothing for these
   // to match. Naming them still beats leaving the previous page's title in the tab.
   admin: `Admin | ${SITE}`,

@@ -8,6 +8,7 @@ import { HomePage } from './pages/HomePage'
 import { BlogPage } from './pages/BlogPage'
 import { PostPage } from './pages/PostPage'
 import { SearchPage } from './pages/SearchPage'
+import { PrivacyPage } from './pages/PrivacyPage'
 import { ArchivePage } from './pages/ArchivePage'
 import { ArchivePostPage } from './pages/ArchivePostPage'
 import { AdminPage, AdminDenied } from './pages/AdminPage'
@@ -138,6 +139,8 @@ function App() {
         return postSlug
           ? <PostPage slug={postSlug} onNavigate={setPage} onSelect={selectPost} />
           : <BlogPage onSelect={selectPost} />
+      case 'privacy':
+        return <PrivacyPage />
       case 'search':
         return <SearchPage onNavigate={setPage} onSelect={selectPost} onSelectArchive={selectArchive} />
       case 'archive':

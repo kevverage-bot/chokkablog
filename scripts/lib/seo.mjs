@@ -41,6 +41,9 @@ export const BLOG_TITLE = `Blog | ${SITE}`
  *  per query. Twin of SEARCH_TITLE in src/lib/pageTitle.ts. */
 export const SEARCH_TITLE = `Search | ${SITE}`
 
+/** The privacy notice. Twin of PRIVACY_TITLE in src/lib/pageTitle.ts. */
+export const PRIVACY_TITLE = `Privacy | ${SITE}`
+
 /** The archive index — the old Blogger site, rehosted. Twin of ARCHIVE_TITLE in
  *  src/lib/pageTitle.ts. */
 export const ARCHIVE_TITLE = `Archive | ${SITE}`

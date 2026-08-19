@@ -23,6 +23,7 @@ export type PageId =
   | 'blog'
   | 'archive'
   | 'search'
+  | 'privacy'
   | 'admin'
   | 'login'
 
@@ -32,6 +33,7 @@ export const PAGE_PATHS: Record<PageId, string> = {
   blog: '/blog',
   archive: '/archive',
   search: '/search',
+  privacy: '/privacy',
   admin: '/admin',
   login: '/login',
 }
