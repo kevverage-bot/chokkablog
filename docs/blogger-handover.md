@@ -48,7 +48,10 @@ before `</head>`, then Save.
   // Post pages only: /YYYY/MM/slug.html. The home page, labels and archives
   // are Blogger's own and are not being moved.
   if (!/^\/\d{4}\/\d{2}\/[^\/]+\.html$/.test(location.pathname)) return;
-  var target = 'https://chokkablog.com' + location.pathname;
+  // The FINAL address, not the one that redirects to it. chokkablog.com keeps
+  // the bare Blogger path working too (vercel.json 308s it), but a canonical
+  // should name the page it means rather than something that forwards there.
+  var target = 'https://chokkablog.com/archive' + location.pathname.replace(/\.html$/, '');
 
   // Blogger emits its own canonical, pointing at itself. Two canonicals saying
   // different things is the same as none, so every one is removed and exactly
@@ -86,7 +89,9 @@ document.querySelectorAll('link[rel=canonical]').length
   + ' → ' + document.querySelector('link[rel=canonical]').href
 ```
 
-It should say `1 → https://chokkablog.com/…`. One, not two. It will not show in
+It should say `1 → https://chokkablog.com/archive/…`. One, not two, and with
+`/archive/` in it and no `.html` on the end — that is the address the page
+actually lives at. It will not show in
 View Source — it is set after the page loads, which is also why Google sees it
 only when it renders the page.
 
