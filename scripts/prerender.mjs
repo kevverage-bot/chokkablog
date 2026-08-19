@@ -456,9 +456,12 @@ async function main() {
   // posts, so if the year-by-year list below stops being written, every archive
   // page becomes an orphan reachable only from the sitemap.
   if (archive.length) {
+    // By the published year, not the year in the path — three of the 229
+    // disagree. Twin of yearOf() in src/lib/dates.ts, and for the same reason:
+    // this list is ordered by published_at, so it must be grouped by it too.
     const byYear = new Map()
     for (const a of archive) {
-      const year = a.path.slice(0, 4)
+      const year = (a.published_at ?? '').slice(0, 4)
       if (!byYear.has(year)) byYear.set(year, [])
       byYear.get(year).push(a)
     }
@@ -473,7 +476,8 @@ async function main() {
       path: '/archive',
       title: ARCHIVE_TITLE,
       description: `Everything published on the original Chokkablog between ${
-        archive[archive.length - 1].path.slice(0, 4)} and ${archive[0].path.slice(0, 4)
+        (archive[archive.length - 1].published_at ?? '').slice(0, 4)} and ${
+        (archive[0].published_at ?? '').slice(0, 4)
       } — ${archive.length} posts, rehosted with their original dates.`,
       jsonLd: [{
         '@context': 'https://schema.org',
@@ -493,7 +497,7 @@ async function main() {
 
     for (const a of archive) {
       const url = `${ORIGIN}/archive/${a.path}`
-      const year = a.path.slice(0, 4)
+      const year = (a.published_at ?? '').slice(0, 4)
       const description = clamp(a.excerpt || a.title)
       w.write({
         path: `/archive/${a.path}`,

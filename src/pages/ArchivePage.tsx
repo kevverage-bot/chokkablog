@@ -3,7 +3,7 @@ import { COLORS } from '../constants/colors'
 import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
 import { useArchiveIndex, type ArchiveSummary } from '../hooks/useArchive'
-import { formatPostDate, isoDate } from '../lib/dates'
+import { formatPostDate, isoDate, yearOf } from '../lib/dates'
 import { pathForArchive, pathForPage, plainClick } from '../lib/routes'
 
 /**
@@ -20,12 +20,16 @@ export function ArchivePage({ onNavigate, onSelect }: {
 }) {
   const { posts, loading } = useArchiveIndex()
 
-  // Newest year first, matching the list. `published_at` is the original date,
-  // so the 2000 entry (a backdated post) genuinely does belong at the bottom.
+  // Newest year first, which comes from the query's own ordering rather than a
+  // sort here — so the grouping key has to be the field it ordered BY. Grouping
+  // by the year in the URL instead scrambles the headings; see yearOf.
+  //
+  // `published_at` is the original date, so the 2000 entry (a backdated post)
+  // genuinely does belong at the bottom.
   const years = useMemo(() => {
     const byYear = new Map<string, ArchiveSummary[]>()
     for (const post of posts) {
-      const year = post.path.slice(0, 4)
+      const year = yearOf(post.published_at)
       const list = byYear.get(year)
       if (list) list.push(post)
       else byYear.set(year, [post])

@@ -5,7 +5,7 @@ import { PageLoading } from '../components/PageLoading'
 import { RichText } from '../components/RichText'
 import { ArchiveComments } from '../components/ArchiveComments'
 import { useArchivePost } from '../hooks/useArchive'
-import { formatPostDate, isoDate } from '../lib/dates'
+import { formatPostDate, isoDate, yearOf } from '../lib/dates'
 import { pathForPage, plainClick } from '../lib/routes'
 import { archiveTitle, useDocumentTitle } from '../lib/pageTitle'
 
@@ -38,7 +38,9 @@ export function ArchivePostPage({ path, onNavigate }: {
   if (loading) return <PageLoading />
   if (!post) return <NotFound onNavigate={onNavigate} />
 
-  const year = post.path.slice(0, 4)
+  // From the date, not the URL — otherwise the banner can claim a year the page
+  // does not show, and "More from 2019" links to an anchor that is not there.
+  const year = yearOf(post.published_at)
 
   return (
     <Container className="py-10 sm:py-14">

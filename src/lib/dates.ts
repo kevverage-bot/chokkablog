@@ -29,3 +29,21 @@ export function isoDate(iso: string | null | undefined): string | undefined {
   if (Number.isNaN(d.getTime())) return undefined
   return d.toISOString().slice(0, 10)
 }
+
+/**
+ * The calendar year a post belongs to, from its ISO timestamp.
+ *
+ * ⚠ FROM `published_at`, NEVER from the year in an archive post's URL. Three of
+ * the 229 disagree — Blogger fixes the path at first publication and the date
+ * was edited afterwards — and grouping by one while sorting by the other put
+ * 2019 between 2022 and 2021 on the archive index, with a post dated February
+ * 2022 sitting under it. Found live.
+ *
+ * Sliced from the ISO string rather than read off a Date, so the answer does not
+ * depend on the reader's timezone: the archive index is prerendered in UTC on a
+ * build machine and re-rendered in the browser, and the two have to agree about
+ * which heading a post sits under.
+ */
+export function yearOf(iso: string | null | undefined): string {
+  return String(iso ?? '').slice(0, 4)
+}
