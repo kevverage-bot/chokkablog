@@ -116,9 +116,15 @@ export function useComments(postId: string | null) {
     // Kit will only take the handover from a browser, so it happens here. ⚠ A
     // failure is reported but never turns the comment into a failure — the words
     // are what the reader came to give, and they are safely stored.
+    //
+    // ⚠ THE SERVER'S ANSWER DECIDES, NOT THE TICKED BOX. `subscribed` comes back
+    // only from a function that understood the flag, so during a deploy where
+    // the site is newer than the function this reports an honest failure instead
+    // of promising a confirmation email that nothing has been asked to send.
     let subscribeFailed = false
-    if (data?.subscribed === true) {
-      const kit = await handOverToKit(sub.email)
+    if (sub.subscribe === true) {
+      const recorded = data?.subscribed === true
+      const kit = recorded ? await handOverToKit(sub.email) : { ok: false }
       subscribeFailed = !kit.ok
     }
     // Deliberately no refetch: the comment is pending, so it would not come back,

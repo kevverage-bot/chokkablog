@@ -8,6 +8,7 @@ import SUBSCRIBE_FN from '../../supabase/functions/subscribe/index.ts?raw'
 import SUBSCRIBE_LIB from '../lib/subscribe.ts?raw'
 import SUBSCRIBE_HOOK from '../hooks/useSubscribe.ts?raw'
 import COMMENT_FORM from '../components/PostComments.tsx?raw'
+import COMMENT_HOOK from '../hooks/useComments.ts?raw'
 import GUARD from '../../supabase/functions/_shared/guard.ts?raw'
 import { FEEDBACK_LIMITS, validateFeedback, isPlausibleEmail } from '../lib/feedback'
 import { COMMENT_LIMITS, validateComment } from '../lib/comments'
@@ -320,6 +321,16 @@ describe('the comment form only subscribes somebody who asked', () => {
   it('runs the sign-up AFTER the comment is stored', () => {
     const code = codeOnly(COMMENT_FN)
     expect(code.indexOf(".from('comments').insert")).toBeLessThan(code.indexOf(".from('subscribers')"))
+  })
+
+  it('believes the server about whether the sign-up happened, not the tick-box', () => {
+    // ⚠ During a deploy where the site is newer than the Edge Function, the old
+    // function ignores the flag entirely. Reporting success from the client's
+    // own checkbox would promise a confirmation email that nothing was asked to
+    // send — the reader waits for ever and blames their spam folder.
+    const code = codeOnly(COMMENT_HOOK)
+    expect(code).toMatch(/data\?\.subscribed === true/)
+    expect(code).toMatch(/recorded \? await handOverToKit/)
   })
 
   it('shows the same small print as the sign-up box, not a second copy of it', () => {
