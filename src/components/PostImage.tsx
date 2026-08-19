@@ -19,7 +19,7 @@ export function PostImage({ url, alt, caption }: {
   alt: string
   caption?: string | null
 }) {
-  const { src, width, height } = parseImageUrl(url)
+  const { src, width, height, outlined } = parseImageUrl(url)
 
   const img = (
     <img
@@ -30,7 +30,27 @@ export function PostImage({ url, alt, caption }: {
       loading="lazy"
       decoding="async"
       className="block w-full rounded-lg"
-      style={{ height: 'auto', maxWidth: '100%' }}
+      style={{
+        height: 'auto',
+        maxWidth: '100%',
+        // Opt-in, per image, from a `+outline` flag in the URL fragment. It
+        // earns its keep on a chart exported with a white background, which
+        // otherwise bleeds into the page and looks like a layout bug; a
+        // photograph with its own edges usually reads better without one. Hence
+        // a choice rather than a rule.
+        //
+        // ⚠ `outline`, not `border` and not an inset `box-shadow`. A border
+        // would add a pixel to each side and undo the space the width/height
+        // attributes reserved, so the picture would still nudge the page as it
+        // loads — which is the whole thing those attributes exist to prevent.
+        // An inset box-shadow takes no space either, but on a replaced element
+        // the image content paints over it, so it simply would not be visible.
+        // An outline takes no layout space, follows the border radius, and is
+        // drawn on top. `-1px` offset tucks it just inside the edge.
+        ...(outlined
+          ? { outline: `1px solid ${COLORS.border}`, outlineOffset: '-1px' }
+          : {}),
+      }}
     />
   )
 

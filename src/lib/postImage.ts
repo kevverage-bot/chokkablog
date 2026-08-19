@@ -107,10 +107,69 @@ export async function uploadPostImage(file: File): Promise<UploadResult> {
  * Kept next to the code that writes the fragment, so the two halves of this
  * convention cannot drift apart.
  */
-export function parseImageUrl(raw: string): { src: string; width?: number; height?: number } {
-  const m = raw.match(/^(.*)#(\d+)x(\d+)$/)
-  if (!m) return { src: raw }
-  return { src: m[1], width: Number(m[2]), height: Number(m[3]) }
+export function parseImageUrl(raw: string): {
+  src: string
+  width?: number
+  height?: number
+  outlined?: boolean
+} {
+  // ⚠ THE OUTLINE FLAG LIVES IN THE FRAGMENT, beside the size, because the
+  // fragment is already where per-image RENDER metadata goes and a fragment is
+  // never sent to the server — so nothing about how a picture is framed can
+  // change which bytes are fetched. It also survives copy-pasting the whole
+  // `![...](...)` from one post to another, which a separate syntax would not.
+  //
+  // Written out as `+outline` rather than a one-letter flag: this appears in the
+  // Markdown Kevin edits by hand, and `#1200x800o` is a puzzle in six months.
+  const outlined = raw.endsWith(OUTLINE_FLAG)
+  const url = outlined ? raw.slice(0, -OUTLINE_FLAG.length) : raw
+
+  const m = url.match(/^(.*)#(\d+)x(\d+)$/)
+  if (!m) {
+    // `#+outline` with no size: the flag on an image saved before sizes existed.
+    return { src: url.endsWith('#') ? url.slice(0, -1) : url, outlined }
+  }
+  return { src: m[1], width: Number(m[2]), height: Number(m[3]), outlined }
+}
+
+/** The suffix that asks for an outline. Appended to the fragment, so an image
+ *  with no recorded size reads `…/x.png#+outline`. */
+export const OUTLINE_FLAG = '+outline'
+
+/**
+ * Add or remove the outline flag on one image URL.
+ *
+ * Tolerant of a URL with no fragment at all: the `#` is added, because the flag
+ * has to live in a fragment or it would become part of the request.
+ */
+export function toggleOutline(rawUrl: string): string {
+  if (rawUrl.endsWith(OUTLINE_FLAG)) {
+    const without = rawUrl.slice(0, -OUTLINE_FLAG.length)
+    // Drop the `#` this function added if nothing else is left inside it —
+    // otherwise toggling on and off again leaves a trailing hash behind every
+    // time, and the URL grows a little more untidy with each change of mind.
+    return without.endsWith('#') ? without.slice(0, -1) : without
+  }
+  return (rawUrl.includes('#') ? rawUrl : rawUrl + '#') + OUTLINE_FLAG
+}
+
+/**
+ * The `![alt](url)` whose markdown contains `caret`, or null.
+ *
+ * Used by the editor's Outline button so the author can put the caret anywhere
+ * in an image — the caption, the alt text, the URL — rather than having to
+ * select it precisely.
+ */
+export function imageAtCaret(text: string, caret: number): { start: number; end: number; url: string } | null {
+  const re = /!\[[^\]]*\]\(([^)\s]+)\)/g
+  for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+    const start = m.index
+    const end = start + m[0].length
+    // Inclusive of both edges, so a caret resting just after the closing
+    // bracket still counts — which is where it lands after an insert.
+    if (caret >= start && caret <= end) return { start, end, url: m[1] }
+  }
+  return null
 }
 
 /**

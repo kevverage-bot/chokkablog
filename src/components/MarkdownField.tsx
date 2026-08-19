@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { RichText } from './RichText'
-import { uploadPostImage } from '../lib/postImage'
+import { uploadPostImage, imageAtCaret, toggleOutline } from '../lib/postImage'
 import { extractEmbedUrl, isUsableEmbedUrl } from '../lib/embedUrl'
 
 interface Props {
@@ -177,6 +177,35 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
     fileRef.current?.click()
   }
 
+  /**
+   * Turn a subtle outline on or off for the image the caret is in.
+   *
+   * A toggle rather than a choice at upload time, because whether a picture
+   * wants an edge is something you judge by looking at it in the post — a chart
+   * exported on white bleeds into the page without one, a photograph usually
+   * looks better without. The flag rides in the URL fragment (see lib/postImage),
+   * so it survives the whole `![...](...)` being copied to another post.
+   *
+   * The caret can be anywhere in the image's markdown — the caption, the alt
+   * text, the URL — rather than the author having to select it exactly.
+   */
+  const outlineImage = () => {
+    const ta = taRef.current
+    if (!ta) return
+    const found = imageAtCaret(value, ta.selectionStart)
+    if (!found) {
+      setToolError('Put the cursor inside an image first — the ![…](…) you want an outline on.')
+      return
+    }
+    setToolError(null)
+    const before = value.slice(0, found.start)
+    const image = value.slice(found.start, found.end).replace(found.url, toggleOutline(found.url))
+    const next = before + image + value.slice(found.end)
+    // Keep the image selected, so a second click undoes the first.
+    pendingSel.current = [found.start, found.start + image.length]
+    onChange(next)
+  }
+
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     // Cleared immediately so choosing the SAME file again still fires a change
@@ -246,6 +275,13 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
           title="Upload a picture and place it here, on a line of its own"
         >
           {uploading ? 'Uploading…' : 'Image'}
+        </ToolButton>
+        <ToolButton
+          disabled={preview}
+          onClick={outlineImage}
+          title="Add or remove a subtle outline on the image the cursor is in — useful for charts on a white background"
+        >
+          Outline
         </ToolButton>
         <ToolButton
           disabled={preview}
