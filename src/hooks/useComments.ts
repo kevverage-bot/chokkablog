@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { readFunctionError } from '../lib/functionError'
+import { handOverToKit } from '../lib/subscribe'
 
 /** A comment as the public sees it. No email — the view does not select it. */
 export interface PublicComment {
@@ -48,6 +49,10 @@ export interface CommentSubmission {
   token: string | null
   elapsedMs: number
   website: string
+  /** The opt-in box beside the form, unticked by default. An address given so a
+   *  comment can be answered is NOT consent to a mailing list — this is the
+   *  separate, explicit act that makes it one. */
+  subscribe?: boolean
 }
 
 /**
@@ -88,7 +93,9 @@ export function useComments(postId: string | null) {
     return () => { cancelled = true }
   }, [read])
 
-  const submit = useCallback(async (sub: CommentSubmission): Promise<{ ok: boolean; error?: string }> => {
+  const submit = useCallback(async (
+    sub: CommentSubmission,
+  ): Promise<{ ok: boolean; error?: string; subscribeFailed?: boolean }> => {
     const { data, error } = await supabase.functions.invoke('submit-comment', {
       body: {
         postId: sub.postId,
@@ -98,14 +105,25 @@ export function useComments(postId: string | null) {
         token: sub.token,
         elapsedMs: sub.elapsedMs,
         website: sub.website,
+        subscribe: sub.subscribe === true,
         viewUrl: typeof window === 'undefined' ? '' : window.location.href,
       },
     })
     if (error) return { ok: false, error: await readFunctionError(error, 'Could not post that.') }
     if (data && data.ok === false) return { ok: false, error: data.error ?? 'Could not post that.' }
+
+    // The consent row was written under the captcha this request already spent;
+    // Kit will only take the handover from a browser, so it happens here. ⚠ A
+    // failure is reported but never turns the comment into a failure — the words
+    // are what the reader came to give, and they are safely stored.
+    let subscribeFailed = false
+    if (data?.subscribed === true) {
+      const kit = await handOverToKit(sub.email)
+      subscribeFailed = !kit.ok
+    }
     // Deliberately no refetch: the comment is pending, so it would not come back,
     // and a list that silently did not change reads as a failure.
-    return { ok: true }
+    return { ok: true, subscribeFailed }
   }, [])
 
   return { comments, loading, refresh: read, submit }

@@ -45,10 +45,27 @@ const POST = {
 let result: { data: unknown; error: null } = { data: POST, error: null }
 
 vi.mock('../lib/supabase', () => {
-  const chain: Record<string, unknown> = {}
-  for (const method of ['select', 'eq', 'order']) chain[method] = () => chain
-  chain.maybeSingle = () => Promise.resolve(result)
-  return { supabase: { from: () => chain } }
+  // Keyed by table, because the page is no longer the only thing on it that
+  // reads: the sign-up box beneath the post fetches its own wording. Answering
+  // every table with the post would hand that box an archive row and crash it
+  // on a column it does not have.
+  const makeChain = (answer: unknown) => {
+    const chain: Record<string, unknown> = {}
+    for (const method of ['select', 'eq', 'order']) chain[method] = () => chain
+    chain.maybeSingle = () => Promise.resolve(answer)
+    return chain
+  }
+  return {
+    supabase: {
+      from: (table: string) => makeChain(
+        table === 'archive_posts'
+          ? result
+          // Not seeded: the box falls back to the bundled wording, which is
+          // exactly what it does on a deploy that lands before the migration.
+          : { data: null, error: { message: 'relation does not exist' } },
+      ),
+    },
+  }
 })
 
 const noop = () => {}
@@ -104,8 +121,24 @@ describe('ArchivePostPage', () => {
     expect(screen.getByText('Author')).toBeTruthy()
     // 1,241 of the imported comments were left unsigned.
     expect(screen.getByText('Anonymous')).toBeTruthy()
-    // There is no way to add another: the archive carries no form.
-    expect(screen.queryByRole('textbox')).toBeNull()
+    // There is no way to add another: the archive carries no comment form. Note
+    // what this checks and what it does not — the page DOES have a text field
+    // now (the sign-up box below), so asserting "no textbox anywhere" would pass
+    // for the wrong reason today and fail for the wrong reason tomorrow.
+    expect(document.querySelector('textarea')).toBeNull()
+    expect(screen.queryByRole('button', { name: /comment/i })).toBeNull()
+  })
+
+  it('offers the email sign-up, which is the point of rehosting these', async () => {
+    // ⚠ An archive page is where a search result lands — 229 of them against a
+    // handful of new posts — so this box does more work here than under
+    // anything recent. It is easy to delete as clutter on an old post.
+    render(<ArchivePostPage path={POST.path} onNavigate={noop} />)
+
+    expect(await screen.findByLabelText(/email address/i)).toBeTruthy()
+    // The wording read failed in this file's mock, so this is also the fallback
+    // doing its job rather than leaving an unlabelled button.
+    expect(screen.getByRole('button', { name: 'Keep me posted' })).toBeTruthy()
   })
 
   it('tells a reader when there is no such post, and keeps it out of the index', async () => {

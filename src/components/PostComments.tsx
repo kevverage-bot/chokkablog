@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
+import { SubscribeSmallPrint } from './SubscribeBox'
 import { CAPTCHA_CONFIGURED, HCAPTCHA_SITE_KEY } from '../lib/captcha'
 import { useComments, threadComments, type PublicComment } from '../hooks/useComments'
 import { validateComment, COMMENT_LIMITS } from '../lib/comments'
+import { useSubscribeContent } from '../hooks/useSubscribeContent'
+import { FALLBACK_SUBSCRIBE_CONTENT } from '../constants/subscribe'
 import { formatPostDate } from '../lib/dates'
 
 /**
@@ -119,12 +122,27 @@ function CommentForm({ postId, submit, onCancel }: {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('')   // honeypot
+  // ⚠ FALSE BY DEFAULT, AND IT MUST STAY FALSE. A pre-ticked box is not consent
+  // under UK GDPR — it has to be a positive act. The reader is here to comment;
+  // the mailing list is an offer, not a condition.
+  const [wantsEmails, setWantsEmails] = useState(false)
   const [token, setToken] = useState<string | null>(null)
   /** Bumped to remount the captcha — see the note in components/Captcha.tsx. */
   const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  /** The comment saved but Kit refused the sign-up. Worth saying, because the
+   *  reader ticked a box and would otherwise wait for an email indefinitely. */
+  const [subscribeFailed, setSubscribeFailed] = useState(false)
+
+  // Read only once the form is open, which is also the only time it renders —
+  // the offer's wording is editable in Admin like the rest of the sign-up copy.
+  // A blank one falls back rather than rendering a checkbox with no label.
+  const { content: subWords, failed: subFailed } = useSubscribeContent()
+  const optInLabel =
+    (subFailed || !subWords ? FALLBACK_SUBSCRIBE_CONTENT : subWords).comment_optin.trim()
+    || FALLBACK_SUBSCRIBE_CONTENT.comment_optin
 
   const openedAt = useRef(0)
   useEffect(() => { openedAt.current = Date.now() }, [])
@@ -142,10 +160,11 @@ function CommentForm({ postId, submit, onCancel }: {
       postId, body, name, email, token,
       elapsedMs: Date.now() - openedAt.current,
       website,
+      subscribe: wantsEmails,
     })
     setSending(false)
 
-    if (res.ok) { setSent(true); return }
+    if (res.ok) { setSubscribeFailed(res.subscribeFailed === true); setSent(true); return }
     // A verified token cannot be replayed, so a retry needs a fresh one.
     setToken(null)
     setAttempt((a) => a + 1)
@@ -164,6 +183,20 @@ function CommentForm({ postId, submit, onCancel }: {
           Thank you — your comment has been sent for review, and will appear here
           once it has been read.
         </p>
+        {/* Two separate things happened, so they are reported separately. The
+            comment is safe either way; only the sign-up can have failed. */}
+        {wantsEmails && !subscribeFailed && (
+          <p className="text-sm mt-2 mb-0" style={{ color: COLORS.ink }}>
+            You will also get an email asking you to confirm the mailing list.
+            Until you click the link in it, you are not on the list.
+          </p>
+        )}
+        {wantsEmails && subscribeFailed && (
+          <p className="text-sm mt-2 mb-0" style={{ color: COLORS.negative }}>
+            Your comment is safe, but the mailing-list sign-up did not go
+            through. Do try the sign-up box on any post.
+          </p>
+        )}
       </div>
     )
   }
@@ -223,6 +256,25 @@ function CommentForm({ postId, submit, onCancel }: {
         published — it is only used to reach you. Comments appear once they have
         been read.
       </p>
+
+      {/* The offer, beneath the promise about the address just above it — that
+          order matters, because the reader has to know what the address is
+          normally used for before being asked to allow a second use of it. The
+          small print is the SAME COMPONENT the sign-up box uses; a second copy
+          phrased slightly differently is how one of them ends up wrong. */}
+      <div className="rounded-md border p-3" style={{ borderColor: COLORS.border, background: COLORS.tint }}>
+        <label htmlFor="cm-subscribe" className="flex items-start gap-2 cursor-pointer">
+          <input
+            id="cm-subscribe"
+            type="checkbox"
+            checked={wantsEmails}
+            onChange={(e) => setWantsEmails(e.target.checked)}
+            className="mt-0.5 cursor-pointer"
+          />
+          <span className="text-sm" style={{ color: COLORS.ink }}>{optInLabel}</span>
+        </label>
+        {wantsEmails && <div className="mt-2 pl-6"><SubscribeSmallPrint /></div>}
+      </div>
 
       {/* Honeypot: positioned off-screen rather than display:none, which some
           bots check for, and out of both the tab order and the accessibility

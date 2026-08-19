@@ -18,7 +18,12 @@ import { FALLBACK_HOME_CONTENT, FALLBACK_TOOLS } from '../constants/home'
 
 /** Both queries the page makes are chains ending in either `.maybeSingle()` or
  *  an await, so the fake has to be both callable and thenable. */
-function fakeTable(result: { data: unknown; error: { message: string } | null }) {
+function fakeTable(result: { data: unknown; error: { message: string } | null } | undefined) {
+  // A table this file has not seeded behaves as "not there yet", which is what
+  // every component on the page is built to survive. Without this, adding a new
+  // read anywhere under HomePage breaks these tests with a destructuring error
+  // that says nothing about what actually changed.
+  result ??= { data: null, error: { message: 'relation does not exist' } }
   const chain = {
     select: () => chain,
     order: () => chain,
@@ -40,6 +45,8 @@ const ERROR = { data: null, error: { message: 'relation "public.home_content" do
 beforeEach(() => {
   results.home_content = ERROR
   results.tools = ERROR
+  // The sign-up box reads its wording too, and falls back when it cannot.
+  results.subscribe_content = ERROR
 })
 
 describe('HomePage', () => {
@@ -98,6 +105,9 @@ describe('HomePage', () => {
     render(<HomePage />)
 
     expect(await screen.findByText('Work in progress')).toBeTruthy()
-    expect(screen.queryByRole('link')).toBeNull()
+    // Scoped to the tools grid. The sign-up box below carries a link to the
+    // privacy notice, which is not a dead end and not what this is about.
+    const card = screen.getByText('Half-built').closest('div')!
+    expect(card.querySelector('a')).toBeNull()
   })
 })

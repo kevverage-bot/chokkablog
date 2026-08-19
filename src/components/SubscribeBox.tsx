@@ -1,33 +1,60 @@
 import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
+import { RichText } from './RichText'
 import { CAPTCHA_CONFIGURED, HCAPTCHA_SITE_KEY } from '../lib/captcha'
 import { useSubscribe } from '../hooks/useSubscribe'
+import { useSubscribeContent } from '../hooks/useSubscribeContent'
+import { FALLBACK_SUBSCRIBE_CONTENT } from '../constants/subscribe'
 import { validateSubscribe, SUBSCRIBE_LIMITS } from '../lib/subscribe'
 
 /**
- * "Tell me when there's something worth reading" — at the foot of a post.
+ * "Tell me when there's something worth reading" — under every post, under every
+ * archive post, and on the home page.
  *
- * The address goes to the `subscribe` Edge Function, which records the consent
- * and hands the person to Kit; KIT sends the confirmation email and owns the
- * list. Nothing here is on the list until they click that link, which is why the
+ * The address goes to the `subscribe` Edge Function, which records the consent;
+ * the browser then hands it to Kit, which sends the confirmation email and owns
+ * the list. Nobody is on the list until they click that link, which is why the
  * confirmation below talks about an email rather than about being subscribed.
  *
- * ⚠ THE PROMISE IN THE COPY IS LOAD-BEARING. "Only when there is something worth
- * your attention, not every post" is the basis on which consent is given, and it
- * is the thing that keeps this list off spam-complaint lists. If the sending
- * pattern ever changes, this wording has to change first, not after.
+ * The pitch is editable in Admin (supabase/010_subscribe.sql). The SMALL PRINT
+ * IS NOT — see the note on it below.
  *
  * ⚠ THE CAPTCHA IS DEFERRED UNTIL SOMEONE TYPES. hCaptcha is ~10 kB of
- * third-party JavaScript in an iframe, and this box — unlike the comment form,
- * which hides behind a button — is on every post page. Rendering the widget up
- * front would put that cost on every reader to serve the few who sign up. So the
- * field is always visible (a sign-up box nobody can see does not work) and the
- * widget mounts on first input. Do not "simplify" this by rendering Captcha
- * unconditionally.
+ * third-party JavaScript in an iframe, and this box is now on nearly every page
+ * on the site. Rendering the widget up front would put that cost on every reader
+ * to serve the few who sign up. So the field is always visible (a sign-up box
+ * nobody can see does not work) and the widget mounts on first input. Do not
+ * "simplify" this by rendering Captcha unconditionally.
  */
-export function SubscribeBox() {
+export function SubscribeBox({ prominent = false }: {
+  /** The home page's copy: a heavier frame, because it is competing with the
+   *  tools grid rather than sitting at the end of something already read. */
+  prominent?: boolean
+}) {
+  // ⚠ THE GUARD IS A SEPARATE COMPONENT FROM THE FORM, and that is not
+  // ceremony. Hooks must run before any conditional return, so a single
+  // component would query the database for its wording on every page view even
+  // where the box can never render. Splitting it means the read happens only
+  // when there is something to read it for.
+  //
+  // The write path cannot work without a captcha (the Edge Function refuses),
+  // so there is nothing to offer. Silent rather than apologetic: an absent
+  // sign-up box is unremarkable, where "sign-ups are not open" invites a reader
+  // to keep checking back for something that was never announced.
+  if (!CAPTCHA_CONFIGURED) return null
+  return <SubscribeForm prominent={prominent} />
+}
+
+function SubscribeForm({ prominent }: { prominent: boolean }) {
   const subscribe = useSubscribe()
+  const { content, failed } = useSubscribeContent()
+  // ⚠ Falls back on an EMPTY read as well as a failed one — an unlabelled button
+  // is nobody's decision. See src/constants/subscribe.ts.
+  const words = failed || !content ? FALLBACK_SUBSCRIBE_CONTENT : content
+  // A blank heading HIDES it — that is an editorial decision somebody can make.
+  // A blank button is not a decision anybody would make, so that one falls back.
+  const button = words.button.trim() || FALLBACK_SUBSCRIBE_CONTENT.button
 
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('')   // honeypot
@@ -42,12 +69,6 @@ export function SubscribeBox() {
 
   const shownAt = useRef(0)
   useEffect(() => { shownAt.current = Date.now() }, [])
-
-  // The write path cannot work without a captcha (the Edge Function refuses),
-  // so there is nothing to offer. Silent rather than apologetic: an absent
-  // sign-up box is unremarkable, where "sign-ups are not open" invites a reader
-  // to keep checking back for something that was never announced.
-  if (!CAPTCHA_CONFIGURED) return null
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,12 +94,13 @@ export function SubscribeBox() {
     setError(res.error ?? 'Could not sign you up — please try again.')
   }
 
+  const frame = prominent
+    ? { borderColor: COLORS.accent, background: COLORS.accentSoft }
+    : { borderColor: COLORS.border, background: COLORS.tint }
+
   if (sent) {
     return (
-      <section
-        className="mt-12 rounded-lg border p-5"
-        style={{ borderColor: COLORS.border, background: COLORS.tint }}
-      >
+      <section className="mt-12 rounded-lg border p-5" style={frame}>
         {/* Deliberately the same answer whether or not the address was already
             known — see the note in hooks/useSubscribe.ts. */}
         <p className="text-sm m-0" style={{ color: COLORS.ink }}>
@@ -95,22 +117,25 @@ export function SubscribeBox() {
 
   return (
     <section
-      className="mt-12 rounded-lg border p-5"
-      style={{ borderColor: COLORS.border, background: COLORS.tint }}
+      className={`${prominent ? 'mt-14' : 'mt-12'} rounded-lg border p-5`}
+      style={frame}
       aria-labelledby="sub-heading"
     >
-      <h2
-        id="sub-heading"
-        className="text-[11px] font-semibold uppercase mb-2"
-        style={{ color: COLORS.accent, letterSpacing: '2px' }}
-      >
-        New posts by email
-      </h2>
+      {words.heading.trim() && (
+        <h2
+          id="sub-heading"
+          className="text-[11px] font-semibold uppercase mb-2"
+          style={{ color: COLORS.accent, letterSpacing: '2px' }}
+        >
+          {words.heading}
+        </h2>
+      )}
 
-      <p className="text-[15px] leading-relaxed m-0 mb-4" style={{ color: COLORS.ink }}>
-        I write when there is something to say, and I will only email you when I
-        think a piece is worth your attention — not every time I post.
-      </p>
+      {words.intro.trim() && (
+        <div className="text-[15px] leading-relaxed mb-4" style={{ color: COLORS.ink }}>
+          <RichText text={words.intro} id="subscribe-intro" />
+        </div>
+      )}
 
       <form onSubmit={send} className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-2">
@@ -134,7 +159,7 @@ export function SubscribeBox() {
             className="px-4 py-2 text-sm font-semibold rounded text-white cursor-pointer disabled:opacity-50 whitespace-nowrap"
             style={{ backgroundColor: COLORS.ink }}
           >
-            {sending ? 'Signing you up…' : 'Keep me posted'}
+            {sending ? 'Signing you up…' : button}
           </button>
         </div>
 
@@ -158,13 +183,33 @@ export function SubscribeBox() {
           <p className="text-sm m-0" style={{ color: COLORS.negative }} role="alert">{error}</p>
         )}
 
-        <p className="text-[11px] m-0" style={{ color: COLORS.faint }}>
-          You will get an email asking you to confirm. Your address is used for
-          nothing but these notifications, it is never shared or sold, and every
-          email has an unsubscribe link. The list is managed by Kit — see the{' '}
-          <a href="/privacy" style={{ color: COLORS.accent }}>privacy notice</a>.
-        </p>
+        <SubscribeSmallPrint />
       </form>
     </section>
+  )
+}
+
+/**
+ * The disclosure under the field.
+ *
+ * ⚠ HARD-CODED, AND IT MUST STAY THAT WAY. Everything above it is editable in
+ * Admin; this is not, because it is the information UK GDPR expects at the point
+ * of collection — what happens next, what the address is used for, that it is
+ * never shared, that leaving is one click, and where the full notice is. A pitch
+ * can be rewritten freely; a disclosure that can be edited is one that can be
+ * edited into a lie by somebody in a hurry, and the person harmed by that is a
+ * reader, not the person who edited it.
+ *
+ * Exported so the comment form's opt-in can show the identical words. A second
+ * copy of this, phrased slightly differently, is how one of them ends up wrong.
+ */
+export function SubscribeSmallPrint() {
+  return (
+    <p className="text-[11px] m-0" style={{ color: COLORS.faint }}>
+      You will get an email asking you to confirm. Your address is used for
+      nothing but these notifications, it is never shared or sold, and every
+      email has an unsubscribe link. The list is managed by Kit — see the{' '}
+      <a href="/privacy" style={{ color: COLORS.accent }}>privacy notice</a>.
+    </p>
   )
 }

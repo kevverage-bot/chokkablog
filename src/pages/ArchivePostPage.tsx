@@ -4,6 +4,7 @@ import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
 import { RichText } from '../components/RichText'
 import { ArchiveComments } from '../components/ArchiveComments'
+import { SubscribeBox } from '../components/SubscribeBox'
 import { useArchivePost } from '../hooks/useArchive'
 import { formatPostDate, isoDate, yearOf } from '../lib/dates'
 import { pathForPage, plainClick } from '../lib/routes'
@@ -105,6 +106,13 @@ export function ArchivePostPage({ path, onNavigate }: {
           </div>
         )}
       </article>
+
+      {/* ⚠ ON THE ARCHIVE TOO, and this is where it earns most. 229 old posts
+          against a handful of new ones: an archive page is where a search
+          result lands, so this is the first thing most readers ever see of the
+          site. The box under a 2015 post is doing more work than the one under
+          this week's. */}
+      <SubscribeBox />
 
       <ArchiveComments comments={post.comments ?? []} />
 

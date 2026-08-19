@@ -7,6 +7,7 @@ import COMMENT_FN from '../../supabase/functions/submit-comment/index.ts?raw'
 import SUBSCRIBE_FN from '../../supabase/functions/subscribe/index.ts?raw'
 import SUBSCRIBE_LIB from '../lib/subscribe.ts?raw'
 import SUBSCRIBE_HOOK from '../hooks/useSubscribe.ts?raw'
+import COMMENT_FORM from '../components/PostComments.tsx?raw'
 import GUARD from '../../supabase/functions/_shared/guard.ts?raw'
 import { FEEDBACK_LIMITS, validateFeedback, isPlausibleEmail } from '../lib/feedback'
 import { COMMENT_LIMITS, validateComment } from '../lib/comments'
@@ -39,6 +40,13 @@ function codeOnly(source: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '')
 }
+
+/** The optional-sign-up block of submit-comment, sliced out so assertions about
+ *  it cannot accidentally be satisfied by the comment handling around it. */
+const SUBSCRIBE_COMMENT_BLOCK = COMMENT_FN.slice(
+  COMMENT_FN.indexOf('─── The optional sign-up ───'),
+  COMMENT_FN.indexOf('// Best effort, and only after the row is committed.'),
+)
 
 /** Pull `key: 1234` out of the function's LIMITS literal. */
 function limitIn(source: string, key: string): number {
@@ -273,6 +281,53 @@ describe('subscribe keeps the properties the consent record depends on', () => {
  * and the first version of this shipped believing a 200 meant success. A reader
  * would have been told to check an inbox for an email nobody had sent.
  */
+/**
+ * THE OPT-IN BESIDE THE COMMENT FORM.
+ *
+ * The riskiest thing added to this site, because getting it wrong is invisible
+ * and unlawful at the same time: an address given so a comment can be answered
+ * is NOT consent to a mailing list, and every commenter quietly enrolled is a
+ * spam complaint waiting to be made against a list that has no defence.
+ */
+describe('the comment form only subscribes somebody who asked', () => {
+  it('requires the flag to be exactly true, not merely truthy', () => {
+    // `body.subscribe` arrives from the open internet. A truthiness check would
+    // enrol anyone who POSTed the string "no".
+    expect(SUBSCRIBE_COMMENT_BLOCK).toMatch(/body\.subscribe === true/)
+  })
+
+  it('starts unticked, and nothing can make it start ticked', () => {
+    // A pre-ticked box is not consent under UK GDPR — it has to be a positive
+    // act. There is deliberately no setting for this.
+    expect(codeOnly(COMMENT_FORM)).toMatch(/const \[wantsEmails, setWantsEmails\] = useState\(false\)/)
+    expect(codeOnly(COMMENT_FORM)).not.toMatch(/defaultChecked/)
+  })
+
+  it('writes the consent row under the captcha the comment already verified', () => {
+    // A verified hCaptcha token cannot be replayed, so the browser cannot call
+    // `subscribe` afterwards without a second captcha. Hence the upsert here.
+    expect(SUBSCRIBE_COMMENT_BLOCK).toMatch(/\.from\('subscribers'\)/)
+    expect(SUBSCRIBE_COMMENT_BLOCK).toMatch(/onConflict: 'email'/)
+  })
+
+  it('never loses the comment because the sign-up failed', () => {
+    // The words are what the reader came to give. The sign-up is an extra, and
+    // an extra must not be able to discard the thing it was attached to.
+    expect(SUBSCRIBE_COMMENT_BLOCK).not.toMatch(/return json\(/)
+    expect(SUBSCRIBE_COMMENT_BLOCK).toMatch(/console\.error/)
+  })
+
+  it('runs the sign-up AFTER the comment is stored', () => {
+    const code = codeOnly(COMMENT_FN)
+    expect(code.indexOf(".from('comments').insert")).toBeLessThan(code.indexOf(".from('subscribers')"))
+  })
+
+  it('shows the same small print as the sign-up box, not a second copy of it', () => {
+    // Two versions of a disclosure is how one of them ends up wrong.
+    expect(codeOnly(COMMENT_FORM)).toContain('SubscribeSmallPrint')
+  })
+})
+
 describe('handOverToKit', () => {
   const kitReplies = (status: number, body: unknown) => {
     vi.stubGlobal('fetch', vi.fn(async () => ({

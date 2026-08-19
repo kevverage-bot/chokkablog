@@ -205,6 +205,28 @@ Three things follow, all easy to undo by accident:
 - **There is no Kit credential anywhere in this project** — not in Supabase, and
   not in the bundle where it would be readable. That endpoint needs none.
 
+**Where the box appears, and the second way in.** Under every blog post, under
+every archive post (which is where most search traffic lands — 229 pages against
+a handful of new ones), on the home page, and as a tick-box beside the comment
+form.
+
+⚠ **The comment opt-in is written by `submit-comment`, not by `subscribe`, and
+that is not duplication.** A verified hCaptcha token cannot be replayed, and
+posting the comment spends it — so a second call to `subscribe` would need a
+second captcha in front of somebody who proved they were human thirty seconds
+ago. The row is written under the captcha already verified, and the browser makes
+the Kit handover afterwards. Two rules hold it in place, both tested: the flag
+must be exactly `true` (a truthiness check would enrol anyone POSTing the string
+`"no"`), and a failure to record the sign-up must never fail the comment.
+
+**The wording is editable in Admin** (`public.subscribe_content`,
+`supabase/010_subscribe.sql`) — heading, pitch, button, and the comment tick-box
+label. ⚠ **The small print under the field is NOT, and must not become so:** the
+confirmation, sole use, never-shared, unsubscribe and privacy-notice line is the
+disclosure UK GDPR expects at the point of collection, and it has to stay true
+whatever the pitch above it says. It is hard-coded in `SubscribeBox.tsx` and a
+test renders the box with every editable field emptied to prove it survives.
+
 **The form's own settings own the double opt-in.** In Kit → the form → Settings →
 Confirmation Email: *Send confirmation email* on, *Auto-confirm new subscribers*
 off. Switching auto-confirm on there makes every sign-up single opt-in with

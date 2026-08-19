@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { Container } from '../components/Container'
 import { PostsSection } from '../components/admin/PostsSection'
 import { HomeSection } from '../components/admin/HomeSection'
+import { SubscribeSection } from '../components/admin/SubscribeSection'
 import { RebuildSection } from '../components/admin/RebuildSection'
 import { CommentsSection } from '../components/admin/CommentsSection'
 import { ArchiveSection } from '../components/admin/ArchiveSection'
@@ -17,8 +18,8 @@ import { FeedbackSection } from '../components/admin/FeedbackSection'
  * two inboxes at the top, each opening itself only when it is not empty. An
  * unread comment is a reader waiting in public; a draft is not waiting for
  * anyone. Below them the blog, which is the daily work, then the archive — 229
- * finished posts that are only ever annotated — then Home, edited a few times a
- * year.
+ * finished posts that are only ever annotated — then Home and the sign-up
+ * wording, each edited a few times a year.
  *
  * ⚠ This component renders only for an admin (App checks the role, and /admin
  * is disallowed in robots.txt), but that is presentation, not security.
@@ -39,6 +40,7 @@ export function AdminPage() {
       <ArchiveSection />
       <RebuildSection />
       <HomeSection />
+      <SubscribeSection />
       <AccountSection />
     </Container>
   )

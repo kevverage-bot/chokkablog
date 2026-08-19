@@ -1,6 +1,7 @@
 import { COLORS } from '../constants/colors'
 import { FALLBACK_HOME_CONTENT, FALLBACK_TOOLS } from '../constants/home'
 import { Container } from '../components/Container'
+import { SubscribeBox } from '../components/SubscribeBox'
 import { PageLoading } from '../components/PageLoading'
 import { RichText } from '../components/RichText'
 import { HOME_TITLE } from '../lib/pageTitle'
@@ -60,6 +61,13 @@ export function HomePage() {
           <RichText text={intro} id="home-intro" />
         </div>
       )}
+
+      {/* ⚠ ABOVE the tools grid, not below it. The grid is four outbound links to
+          other sites; anything under it is being offered to a reader who has
+          already been given somewhere else to go. `prominent` gives it the
+          accent frame, because here it is competing for attention rather than
+          sitting at the end of something already read. */}
+      <SubscribeBox prominent />
 
       {cards.length > 0 && (
         <section className="mt-14">

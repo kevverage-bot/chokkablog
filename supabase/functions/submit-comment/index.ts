@@ -78,6 +78,48 @@ Deno.serve(async (req) => {
       return json({ error: 'Could not save that — please try again.' }, 500)
     }
 
+    // ─── The optional sign-up ───
+    // ⚠ WHY THIS LIVES IN THE COMMENT FUNCTION AT ALL, rather than the browser
+    // calling `subscribe` afterwards: a verified hCaptcha token CANNOT BE
+    // REPLAYED, and this request just spent it. A second call would need a
+    // second captcha, which is an absurd thing to put in front of somebody who
+    // has already proved they are a person thirty seconds ago. So the row is
+    // written here, under the captcha that was already verified, and the browser
+    // does only the Kit handover — which needs no token, and which Kit will
+    // accept only from a browser anyway (see supabase/functions/subscribe).
+    //
+    // ⚠ AND IT MUST BE AN EXPLICIT, SEPARATE ACT. `subscribe` is a box the
+    // reader ticked, unticked by default, distinct from posting the comment.
+    // Consent has to be freely given and specific; an address collected so a
+    // comment can be replied to is NOT consent to a mailing list, and quietly
+    // enrolling every commenter would be both unlawful and the fastest way to
+    // collect spam complaints.
+    const wantsEmails = body.subscribe === true
+    if (wantsEmails) {
+      let sourcePage: string | null = null
+      try {
+        const v = String(body.viewUrl ?? '')
+        sourcePage = v ? new URL(v).pathname : null
+      } catch { sourcePage = null }
+
+      // Same upsert as the sign-up box: lowercased to match the check
+      // constraint, and `status` absent so an existing 'confirmed' row is not
+      // demoted. A failure here must NOT fail the comment — the reader's words
+      // are the thing they came to give, and losing them over a mailing list
+      // would be the wrong way round.
+      const { error: subErr } = await admin
+        .from('subscribers')
+        .upsert({
+          email: email.toLowerCase(),
+          source: 'site',
+          source_page: sourcePage,
+          view_url: String(body.viewUrl ?? '').slice(0, 2000) || null,
+          user_agent: (req.headers.get('user-agent') ?? '').slice(0, 500) || null,
+          ip_hash: g.ipHash,
+        }, { onConflict: 'email', ignoreDuplicates: false })
+      if (subErr) console.error('Comment saved but the sign-up was not recorded:', subErr.message)
+    }
+
     // Best effort, and only after the row is committed.
     await sendAlert({
       subject: `chokkablog comment awaiting review — ${post.headline ?? post.slug ?? 'a post'}`,
@@ -92,7 +134,10 @@ Deno.serve(async (req) => {
       replyTo: email,
     }).catch((e) => console.error('Comment stored but the alert email failed:', e))
 
-    return json({ ok: true })
+    // `subscribed` tells the browser to make the Kit handover, nothing more. It
+    // echoes what the reader asked for on this request and reveals nothing about
+    // whether they were already on the list — see the note in hooks/useSubscribe.ts.
+    return json({ ok: true, subscribed: wantsEmails })
   } catch (e) {
     console.error(e)
     return json({ error: e instanceof Error ? e.message : 'Unexpected error' }, 500)
