@@ -1,25 +1,22 @@
 // Supabase Edge Function: subscribe
 //
-// The public write path for new-post sign-ups: the box at the foot of a post →
-// this → the `subscribers` table (the consent record) → Kit (the list).
+// The public write path for new-post sign-ups. It records the CONSENT, and
+// nothing else: the browser hands the address to Kit itself, immediately after
+// this returns. See src/lib/subscribe.ts for that half.
 //
-// ⚠ WHY IT POSTS AT A FORM URL AND NOT AT KIT'S API. Kit's documented v4 route,
-// POST /v4/subscribers, adds people in state `active` and sends NOTHING — it
-// bypasses double opt-in entirely. Verified against the live account on
-// 19 Aug 2026: an address added that way was on the list immediately and got no
-// email. Posting at the form's own submission endpoint — the one Kit's embed
-// script uses — behaves like a real sign-up: the address is held unconfirmed and
-// Kit sends the confirmation email configured on the form.
+// ⚠ WHY THIS FUNCTION DOES NOT TALK TO KIT, having originally been written to.
+// Kit's form endpoint expects a reader's browser. Called from here it answers
+// HTTP 200 with `"status":"quarantined"` and a guard URL — its anti-abuse system
+// refusing a submission from a datacentre IP with no browser behind it. Verified
+// against the live form on 19 Aug 2026: the identical POST succeeds from a
+// residential connection and is quarantined from the Edge Function. Browser-like
+// headers do not fix it; the IP is the part Kit objects to, and no header can
+// change that.
 //
-// Two consequences worth keeping:
-//   1. NO API KEY. This endpoint is unauthenticated, so there is no Kit
-//      credential in Supabase to leak, rotate or forget. Do not "improve" this by
-//      moving to the authenticated API — it would cost the double opt-in, which
-//      is the entire consent mechanism.
-//   2. The form's settings own the behaviour. Confirmation email on, auto-confirm
-//      off, in Kit → the form → Settings → Confirmation Email. Turning
-//      auto-confirm on there would silently make every sign-up single opt-in,
-//      with no change in this repo to show for it.
+// So the order is: this function guards and records, then the BROWSER posts to
+// Kit from the reader's own address, which is the request Kit is built to
+// accept. The consent record is still written first — a Kit failure costs a
+// notification, never the evidence that somebody asked.
 //
 // It exists for the same reason as submit-feedback: RLS cannot enforce a captcha.
 // The anon key ships in the JS bundle, so an anon INSERT policy on `subscribers`
@@ -27,7 +24,6 @@
 //
 // Deploy:   supabase functions deploy subscribe
 // Secrets:  HCAPTCHA_SECRET (shared with the other two — already set).
-//           Optional: KIT_FORM_ID (defaults to the live form below).
 //
 // deno-lint-ignore-file no-explicit-any
 import { adminClient, cors, guard, json, EMAIL_RE } from '../_shared/guard.ts'
@@ -43,14 +39,6 @@ const LIMITS = {
 // and this is the endpoint where a flood costs Kit's sending reputation rather
 // than just an inbox.
 const RATE_LIMIT = { perSenderPerHour: 3, sitePerHour: 30 }
-
-/** "Chokkablog Sign Up". Not a secret — it is in the embed code on any site that
- *  uses one — but an env var so it can be repointed without a deploy. */
-const FORM_ID = Deno.env.get('KIT_FORM_ID') ?? '9820264'
-
-/** Kit is a third party on the far side of the internet. Without this, one slow
- *  response holds a reader's browser open until the platform's own timeout. */
-const KIT_TIMEOUT_MS = 10_000
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -76,10 +64,9 @@ Deno.serve(async (req) => {
     let sourcePage: string | null = null
     try { sourcePage = viewUrl ? new URL(viewUrl).pathname : null } catch { sourcePage = null }
 
-    // ⚠ OUR ROW FIRST, KIT SECOND. The consent record is the thing we are
-    // obliged to be able to produce; the handover is the thing we can retry. If
-    // this order is reversed, a Kit outage loses the evidence that somebody
-    // asked, which is the one thing this table exists for.
+    // ⚠ THE CONSENT ROW IS WRITTEN BEFORE THE BROWSER IS TOLD TO GO TO KIT, and
+    // the caller awaits this. The record is the thing we are obliged to be able
+    // to produce; the handover is the thing that can be retried.
     //
     // Upsert, because a repeat sign-up is not an error — see the constraint note
     // in 009_subscribers.sql. `status` is deliberately NOT overwritten on
@@ -98,37 +85,6 @@ Deno.serve(async (req) => {
     if (upsertErr) {
       console.error('Failed to record a sign-up:', upsertErr.message)
       return json({ error: 'Could not sign you up — please try again.' }, 500)
-    }
-
-    // Hand over to Kit. This is what sends the confirmation email; until the
-    // reader clicks the link in it, they are not on the list.
-    let kitOk = false
-    let kitError = ''
-    try {
-      const res = await fetch(`https://app.kit.com/forms/${FORM_ID}/subscriptions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ email_address: email }),
-        signal: AbortSignal.timeout(KIT_TIMEOUT_MS),
-      })
-      const payload = await res.json().catch(() => ({}))
-      kitOk = res.ok && payload?.status === 'success'
-      if (!kitOk) kitError = `Kit ${res.status}: ${JSON.stringify(payload).slice(0, 300)}`
-    } catch (e) {
-      kitError = e instanceof Error ? e.message : 'Kit request failed'
-    }
-
-    if (!kitOk) {
-      // The consent stands and the row is kept — flagged, so it can be chased by
-      // hand rather than silently lost. The reader is told the truth: nothing
-      // will arrive, so "check your inbox" would be a lie that costs them the
-      // sign-up.
-      console.error('Kit handover failed:', kitError)
-      await admin
-        .from('subscribers')
-        .update({ status: 'failed', kit_error: kitError.slice(0, 500) })
-        .eq('email', email)
-      return json({ error: 'Something went wrong at our end — please try again in a moment.' }, 502)
     }
 
     // ⚠ ONE ANSWER, WHETHER OR NOT THIS ADDRESS WAS ALREADY KNOWN. Anyone can

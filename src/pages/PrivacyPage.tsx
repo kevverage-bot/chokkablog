@@ -104,6 +104,13 @@ export function PrivacyPage() {
           has an unsubscribe link, which works immediately and without asking me.
         </P>
         <P>
+          One detail worth being straight about: when you press the button your
+          browser contacts Kit directly, so Kit sees your IP address as well as
+          the address you typed. That is how their system tells a real sign-up
+          from an automated one, and it is the only point on this site where your
+          browser talks to anyone but me.
+        </P>
+        <P>
           I keep my own record of the fact that you signed up, when, and from
           which page. That is the record that shows your consent was given, and
           it is also what lets me move to a different email provider one day

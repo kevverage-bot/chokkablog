@@ -173,42 +173,51 @@ the site** — which is the intended state, not a bug.
 not set them, and never put the service-role key in this repo or in any `VITE_`
 variable.
 
-### The email sign-up, and the one URL it turns on
+### The email sign-up, and where its two halves run
 
-`subscribe` records the consent in `public.subscribers` and then hands the address
-to **Kit**, which sends the confirmation email and owns the list.
+`subscribe` records the consent in `public.subscribers`. It does **not** talk to
+Kit — the reader's browser does that, immediately afterwards
+(`src/lib/subscribe.ts`), and Kit sends the confirmation email.
 
-⚠ **It posts at `https://app.kit.com/forms/<id>/subscriptions`, NOT at Kit's
-API, and that is not an oversight.** Both were tried against the live account on
-19 Aug 2026:
+⚠ **That split is not a style choice. Three routes were tried against the live
+account on 19 Aug 2026:**
 
 | Route | Result |
 | --- | --- |
-| `POST https://api.kit.com/v4/subscribers` | Added as `state: "active"`. **No email sent.** Double opt-in bypassed. |
-| `POST https://app.kit.com/forms/<id>/subscriptions` | Held unconfirmed, **confirmation email sent**. |
+| `POST api.kit.com/v4/subscribers` | Added as `state: "active"`. **No email sent.** Double opt-in bypassed. |
+| `POST app.kit.com/forms/<id>/subscriptions`, **from the Edge Function** | `200` with **`"status":"quarantined"`** and a guard URL. Kit's anti-abuse refusing a datacentre IP. |
+| `POST app.kit.com/forms/<id>/subscriptions`, **from a browser** | `"status":"success"`, held unconfirmed, **confirmation email sent.** |
 
-So the form endpoint is the only one that produces a consent record worth having.
-Two things follow, and both are easy to undo by accident:
+So the only route that produces consent worth having is the one that runs in the
+reader's browser. Browser-like headers do not rescue the server-side call — the
+IP is what Kit objects to. Kit answers the preflight with
+`access-control-allow-origin: *`, which is what makes the client-side fetch legal.
 
-- **There is no Kit credential anywhere in this project.** That endpoint is
-  unauthenticated. Nothing to set, rotate or leak. Moving to the "proper" API
-  would cost the double opt-in and gain nothing.
-- **The form's own settings own the behaviour.** In Kit → the form → Settings →
-  Confirmation Email: *Send confirmation email* on, *Auto-confirm new
-  subscribers* off. Switching auto-confirm on there would silently make every
-  sign-up single opt-in, with nothing in this repo changed to show for it.
+Three things follow, all easy to undo by accident:
 
-`src/__tests__/publicWrite.test.ts` pins both the URL and the absence of a key.
+- **Moving the Kit call "properly" onto the server would silently stop every
+  confirmation email.** A test asserts the Edge Function's source contains no
+  `kit.com` at all.
+- **Kit answers `200` when it has refused.** The outcome is `status` in the body,
+  never the status line. The first version of this shipped believing `res.ok`
+  meant success; a reader would have been told to check an inbox for an email
+  nobody had sent. There is a test for the quarantine reply specifically.
+- **There is no Kit credential anywhere in this project** — not in Supabase, and
+  not in the bundle where it would be readable. That endpoint needs none.
 
-The form is **9820264** ("Chokkablog Sign Up"). Override with a `KIT_FORM_ID`
-secret if it is ever replaced — no deploy needed, the function reads it at run
-time.
+**The form's own settings own the double opt-in.** In Kit → the form → Settings →
+Confirmation Email: *Send confirmation email* on, *Auto-confirm new subscribers*
+off. Switching auto-confirm on there makes every sign-up single opt-in with
+nothing in this repo changed to show for it.
+
+The form is **9820264** ("Chokkablog Sign Up"), in `src/lib/subscribe.ts`.
 
 Also note: **`public.subscribers` is the consent record, not the list.** A row
-says somebody asked; Kit knows who actually confirmed, and an unsubscribe made
-through Kit's footer link never reaches this table. `status` stays `'pending'`
-for ever unless something is built to write back. That is documented at length in
-`009_subscribers.sql` and is worth reading before trusting the column.
+says somebody asked; Kit knows who confirmed, and an unsubscribe made through
+Kit's footer link never reaches this table. Because the handover now happens in
+the browser, a sign-up Kit refuses leaves a `'pending'` row rather than a
+`'failed'` one — the browser cannot write here. `009_subscribers.sql` documents
+that at length and is worth reading before trusting the column.
 
 ## Rebuilding after publishing
 

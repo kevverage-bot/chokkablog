@@ -1,14 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 // `?raw` gives the deployed source as a string — the Deno functions cannot be
 // imported for real (they call Deno.serve at module load), and their text is what
 // this file needs to assert on anyway.
 import FEEDBACK_FN from '../../supabase/functions/submit-feedback/index.ts?raw'
 import COMMENT_FN from '../../supabase/functions/submit-comment/index.ts?raw'
 import SUBSCRIBE_FN from '../../supabase/functions/subscribe/index.ts?raw'
+import SUBSCRIBE_LIB from '../lib/subscribe.ts?raw'
+import SUBSCRIBE_HOOK from '../hooks/useSubscribe.ts?raw'
 import GUARD from '../../supabase/functions/_shared/guard.ts?raw'
 import { FEEDBACK_LIMITS, validateFeedback, isPlausibleEmail } from '../lib/feedback'
 import { COMMENT_LIMITS, validateComment } from '../lib/comments'
-import { SUBSCRIBE_LIMITS, validateSubscribe } from '../lib/subscribe'
+import { SUBSCRIBE_LIMITS, validateSubscribe, handOverToKit, KIT_FORM_URL } from '../lib/subscribe'
 import { threadComments, type PublicComment } from '../hooks/useComments'
 
 /**
@@ -193,37 +195,45 @@ describe('threadComments', () => {
 /**
  * THE SIGN-UP PATH.
  *
- * These are not style assertions. Each one pins a decision that was made by
- * testing the live Kit account on 19 Aug 2026, and every one of them is silent
- * when broken — the form keeps working, and what changes is whether people
- * consented, whether the record survives, or what a stranger can learn.
+ * Each of these pins a decision that was made by testing the live Kit account on
+ * 19 Aug 2026, and every one is silent when broken — the form keeps working, and
+ * what changes is whether people consented, whether the record survives, or what
+ * a stranger can learn.
  */
 describe('subscribe keeps the properties the consent record depends on', () => {
-  it('posts at the FORM endpoint, never at the subscribers API', () => {
-    // ⚠ THE WHOLE DOUBLE OPT-IN RESTS ON THIS ONE URL. Kit's documented
-    // POST /v4/subscribers adds people as `active` and sends nothing; the form's
-    // own submission endpoint holds them unconfirmed and sends the confirmation
-    // email. Both were tried against the live account — the first added an
-    // address silently, the second sent the email. Swapping this URL for the
-    // "proper" API would turn every sign-up into single opt-in with no other
-    // visible change.
-    expect(SUBSCRIBE_FN).toMatch(/https:\/\/app\.kit\.com\/forms\/\$\{FORM_ID\}\/subscriptions/)
-    expect(codeOnly(SUBSCRIBE_FN)).not.toContain('api.kit.com/v4/subscribers')
+  it('the EDGE FUNCTION does not talk to Kit', () => {
+    // ⚠ THE FIX FOR THE QUARANTINE, AND THE EASIEST THING IN THIS REPO TO UNDO
+    // BY TIDYING. Kit's form endpoint answers a datacentre IP with 200 and
+    // `"status":"quarantined"`; the identical POST from a browser succeeds. So
+    // the handover is client-side (src/lib/subscribe.ts) and this function only
+    // guards and records. Moving the fetch back here looks more correct and
+    // stops every confirmation email being sent.
+    expect(codeOnly(SUBSCRIBE_FN)).not.toContain('kit.com')
   })
 
-  it('needs no Kit credential at all', () => {
+  it('the browser posts at the FORM endpoint, never at the subscribers API', () => {
+    // POST /v4/subscribers adds people as `active` and sends nothing at all.
+    expect(KIT_FORM_URL).toBe('https://app.kit.com/forms/9820264/subscriptions')
+    expect(codeOnly(SUBSCRIBE_LIB)).not.toContain('api.kit.com')
+  })
+
+  it('needs no Kit credential anywhere', () => {
     // The form endpoint is unauthenticated, which is why there is no Kit key in
-    // Supabase to leak or rotate. A key appearing here means someone moved to
-    // the authenticated API — see above for what that costs.
+    // Supabase to leak or rotate — and no key in the bundle, where it would be
+    // readable by anyone.
     expect(codeOnly(SUBSCRIBE_FN)).not.toMatch(/KIT_API_KEY|X-Kit-Api-Key/)
+    expect(codeOnly(SUBSCRIBE_LIB)).not.toMatch(/KIT_API_KEY|X-Kit-Api-Key/)
   })
 
   it('records the consent BEFORE handing over to Kit', () => {
     // The row is the thing we are obliged to be able to produce; the handover is
     // the thing that can be retried. Reversed, a Kit outage loses the evidence
     // that somebody asked.
-    const code = codeOnly(SUBSCRIBE_FN)
-    expect(code.indexOf(".from('subscribers')")).toBeLessThan(code.indexOf('app.kit.com'))
+    // Compared at the CALL sites: `handOverToKit` also appears in the import
+    // line at the top, which would make a naive indexOf compare the wrong two
+    // things and pass whatever the order really was.
+    const code = codeOnly(SUBSCRIBE_HOOK)
+    expect(code.indexOf("invoke('subscribe'")).toBeLessThan(code.indexOf('return handOverToKit('))
   })
 
   it('lowercases the address, matching the check constraint on the column', () => {
@@ -253,15 +263,62 @@ describe('subscribe keeps the properties the consent record depends on', () => {
     expect(SUBSCRIBE_FN).toMatch(/return json\(\{ ok: true \}\)/)
     expect(codeOnly(SUBSCRIBE_FN)).not.toMatch(/already/i)
   })
+})
 
-  it('tells the truth when the handover failed', () => {
-    // "Check your inbox" when no email is coming costs the reader the sign-up
-    // and looks like their mistake. The row is kept and flagged instead.
-    expect(SUBSCRIBE_FN).toMatch(/status: 'failed'/)
+/**
+ * handOverToKit, against a stubbed Kit.
+ *
+ * ⚠ THE QUARANTINE CASE IS THE POINT OF THIS BLOCK. Kit answers HTTP 200 when it
+ * has REFUSED a submission — the outcome is in the body, not the status line —
+ * and the first version of this shipped believing a 200 meant success. A reader
+ * would have been told to check an inbox for an email nobody had sent.
+ */
+describe('handOverToKit', () => {
+  const kitReplies = (status: number, body: unknown) => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => body,
+    })))
+  }
+
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('accepts a real success', async () => {
+    kitReplies(200, { status: 'success', redirect_url: 'https://app.kit.com/forms/success' })
+    await expect(handOverToKit('reader@example.com')).resolves.toEqual({ ok: true })
   })
 
-  it('does not wait on Kit for ever', () => {
-    expect(SUBSCRIBE_FN).toMatch(/AbortSignal\.timeout/)
+  it('REFUSES a quarantined submission, despite the 200', async () => {
+    kitReplies(200, {
+      status: 'quarantined',
+      url: 'https://app.kit.com/forms/guards/58b5769d-ebaa-4ca9-9808-dda3f0551b47',
+    })
+    const res = await handOverToKit('reader@example.com')
+    expect(res.ok).toBe(false)
+    expect(res.error).toBeTruthy()
+  })
+
+  it('refuses anything that is not explicitly a success', async () => {
+    kitReplies(200, { status: 'error' })
+    await expect(handOverToKit('reader@example.com')).resolves.toMatchObject({ ok: false })
+    kitReplies(500, {})
+    await expect(handOverToKit('reader@example.com')).resolves.toMatchObject({ ok: false })
+  })
+
+  it('survives a blocked or unreachable Kit rather than throwing', async () => {
+    // An extension or a network that refuses kit.com throws instead of answering,
+    // and a rejected promise here would take the whole form down with it.
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('blocked') }))
+    await expect(handOverToKit('reader@example.com')).resolves.toMatchObject({ ok: false })
+  })
+
+  it('sends the address lowercased, as the consent row stores it', async () => {
+    const spy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ status: 'success' }) }))
+    vi.stubGlobal('fetch', spy)
+    await handOverToKit('  Reader@Example.COM  ')
+    const body = JSON.parse((spy.mock.calls[0] as unknown as [string, { body: string }])[1].body)
+    expect(body.email_address).toBe('reader@example.com')
   })
 })
 

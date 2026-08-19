@@ -60,10 +60,15 @@ create table if not exists public.subscribers (
   ip_hash       text,
 
   -- ─── State ───
-  -- 'pending'      — asked here, handed to Kit, confirmation not (known to be) clicked
+  -- 'pending'      — asked here; whether Kit accepted the handover is not known
   -- 'confirmed'    — known to have double opted in
   -- 'unsubscribed' — known to have left
-  -- 'failed'       — the handover to Kit did not succeed; the consent still stands
+  -- 'failed'       — set BY HAND only. Nothing writes it: the handover to Kit
+  --                  happens in the reader's browser (Kit quarantines anything
+  --                  from a datacentre IP — see supabase/functions/subscribe),
+  --                  and the browser cannot write to this table. A sign-up that
+  --                  Kit refused therefore leaves a 'pending' row, which is
+  --                  honest: they asked, and they are not on the list.
   --
   -- ⚠ READ 'pending' AS "NOT KNOWN TO BE CONFIRMED", NOT AS "NOT CONFIRMED".
   -- Kit owns the confirmation click, so this column is only as current as
