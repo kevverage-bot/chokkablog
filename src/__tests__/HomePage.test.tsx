@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { HomePage } from '../pages/HomePage'
 import { FALLBACK_HOME_CONTENT, FALLBACK_TOOLS } from '../constants/home'
-import { newestPublished } from '../components/LatestPost'
+import { newestPublished } from '../lib/latestPost'
 import type { Post } from '../hooks/usePosts'
 
 /**
