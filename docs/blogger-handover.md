@@ -50,15 +50,22 @@ before `</head>`, then Save.
   if (!/^\/\d{4}\/\d{2}\/[^\/]+\.html$/.test(location.pathname)) return;
   var target = 'https://chokkablog.com' + location.pathname;
 
-  // Blogger emits its own canonical pointing at itself. REPLACE it — two
-  // canonicals saying different things is the same as none.
-  var link = document.querySelector('link[rel="canonical"]');
-  if (!link) {
-    link = document.createElement('link');
+  // Blogger emits its own canonical, pointing at itself. Two canonicals saying
+  // different things is the same as none, so every one is removed and exactly
+  // one added back. Run twice — now, and once the document has finished — so
+  // it does not matter whether Blogger's tag is written before or after this.
+  function claim() {
+    var existing = document.querySelectorAll('link[rel="canonical"]');
+    for (var i = 0; i < existing.length; i++) {
+      existing[i].parentNode.removeChild(existing[i]);
+    }
+    var link = document.createElement('link');
     link.setAttribute('rel', 'canonical');
+    link.setAttribute('href', target);
     document.head.appendChild(link);
   }
-  link.setAttribute('href', target);
+  claim();
+  document.addEventListener('DOMContentLoaded', claim);
 
   // STEP 2 — uncomment this one line when the new pages are indexed.
   // location.replace(target);
@@ -71,10 +78,17 @@ There is no `<b:if>` around it on purpose: the path test does the same job
 without depending on Blogger's template language, which on this blog is the
 older v2 dialect (`b:version='2'`, confirmed in the theme export).
 
-**Check it worked:** open any post on blogspot, right-click → Inspect → Elements,
-and look in `<head>`. The canonical should read `https://chokkablog.com/…`. It
-will not show in View Source — it is set after the page loads, which is also why
-Google sees it only when it renders the page.
+**Check it worked:** open any post on blogspot, right-click → Inspect → Console,
+and paste:
+
+```js
+document.querySelectorAll('link[rel=canonical]').length
+  + ' → ' + document.querySelector('link[rel=canonical]').href
+```
+
+It should say `1 → https://chokkablog.com/…`. One, not two. It will not show in
+View Source — it is set after the page loads, which is also why Google sees it
+only when it renders the page.
 
 Then, in Search Console:
 
