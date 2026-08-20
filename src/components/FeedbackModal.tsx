@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
-import { HCAPTCHA_SITE_KEY } from '../lib/captcha'
 import { useSendFeedback } from '../hooks/useSendFeedback'
+import { useCaptchaSubmit } from '../hooks/useCaptchaSubmit'
 import { validateFeedback, FEEDBACK_LIMITS } from '../lib/feedback'
 
 /**
@@ -19,9 +19,6 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('')   // honeypot
-  const [token, setToken] = useState<string | null>(null)
-  /** Bumped to remount the captcha — see the note in components/Captcha.tsx. */
-  const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -37,14 +34,11 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    const invalid = validateFeedback({ message, name, email })
-    if (invalid) { setError(invalid); return }
-    if (HCAPTCHA_SITE_KEY && !token) { setError('Please complete the captcha.'); return }
-
+  /** Pressing Send without a solved captcha ARMS the form; solving it then
+   *  sends. Shared with the other two public forms — see
+   *  hooks/useCaptchaSubmit.ts, including why a token arriving on its own must
+   *  never post what somebody is still writing. */
+  const captcha = useCaptchaSubmit(async (token) => {
     setSending(true)
     const res = await send({
       message, name, email, token,
@@ -53,10 +47,19 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
     })
     setSending(false)
 
-    if (res.ok) { setSent(true); return }
-    setToken(null)
-    setAttempt((a) => a + 1)
+    if (res.ok) { setSent(true); return true }
     setError(res.error ?? 'Could not send that — please try again.')
+    return false
+  })
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    const invalid = validateFeedback({ message, name, email })
+    if (invalid) { captcha.disarm(); setError(invalid); return }
+
+    captcha.submit()
   }
 
   const inputCls = 'w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2'
@@ -182,7 +185,16 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
               />
             </div>
 
-            <Captcha key={attempt} onToken={setToken} />
+            <Captcha key={captcha.attempt} onToken={captcha.onToken} />
+
+            {/* Neutral, not red, and it promises the send — so the form
+                completing by itself a moment later reads as the thing that was
+                described rather than a surprise. */}
+            {captcha.armed && !error && (
+              <p className="text-sm m-0" style={{ color: COLORS.ink }} role="status">
+                Just tick the box above — your message will be sent as soon as you do.
+              </p>
+            )}
 
             {error && (
               <p className="text-sm m-0" style={{ color: COLORS.negative }} role="alert">{error}</p>
@@ -199,11 +211,11 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 type="submit"
-                disabled={sending}
+                disabled={sending || captcha.armed}
                 className="px-4 py-1.5 text-xs font-semibold rounded text-white cursor-pointer disabled:opacity-50"
                 style={{ backgroundColor: COLORS.ink }}
               >
-                {sending ? 'Sending…' : 'Send'}
+                {sending ? 'Sending…' : captcha.armed ? 'Waiting for the captcha…' : 'Send'}
               </button>
             </div>
           </form>

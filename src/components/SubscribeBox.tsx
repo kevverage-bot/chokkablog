@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
 import { RichText } from './RichText'
-import { CAPTCHA_CONFIGURED, HCAPTCHA_SITE_KEY } from '../lib/captcha'
+import { CAPTCHA_CONFIGURED } from '../lib/captcha'
 import { useSubscribe } from '../hooks/useSubscribe'
+import { useCaptchaSubmit } from '../hooks/useCaptchaSubmit'
 import { useSubscribeContent } from '../hooks/useSubscribeContent'
 import { FALLBACK_SUBSCRIBE_CONTENT } from '../constants/subscribe'
 import { validateSubscribe, SUBSCRIBE_LIMITS } from '../lib/subscribe'
@@ -58,30 +59,23 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
 
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('')   // honeypot
-  const [token, setToken] = useState<string | null>(null)
-  /** Bumped to remount the captcha — see the note in components/Captcha.tsx. */
-  const [attempt, setAttempt] = useState(0)
   /** Set the moment the reader shows intent; gates the third-party iframe. */
   const [engaged, setEngaged] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
-  /**
-   * They pressed the button before the captcha was solved, and are now solving
-   * it. See the auto-submit below.
-   */
-  const [armed, setArmed] = useState(false)
 
   const shownAt = useRef(0)
   useEffect(() => { shownAt.current = Date.now() }, [])
 
   /**
-   * The submission itself, separated from the click.
+   * The send itself, separated from the press.
    *
-   * `useCallback` because the effect below calls it, and a fresh identity on
-   * every render would make that effect fire on every render too.
+   * ⚠ PRESSING THE BUTTON WITHOUT SOLVING THE CAPTCHA ARMS THE FORM rather than
+   * scolding the reader; solving it then sends. See hooks/useCaptchaSubmit.ts
+   * for why, and for the two rules that stop that being dangerous.
    */
-  const submitNow = useCallback(async (captchaToken: string | null) => {
+  const captcha = useCaptchaSubmit(async (captchaToken) => {
     setSending(true)
     const res = await subscribe({
       email,
@@ -91,56 +85,19 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
     })
     setSending(false)
 
-    if (res.ok) { setSent(true); return }
-    // A verified token cannot be replayed, so a retry needs a fresh one — and
-    // the remount mints one on its own. Disarmed first, or that fresh token
-    // would resubmit a request that has just failed, for ever.
-    setArmed(false)
-    setToken(null)
-    setAttempt((a) => a + 1)
+    if (res.ok) { setSent(true); return true }
     setError(res.error ?? 'Could not sign you up — please try again.')
-  }, [subscribe, email, website])
-
-  /**
-   * ⚠ SIGN THEM UP THE MOMENT THE CAPTCHA IS SOLVED, if they have already asked.
-   *
-   * Without this the form is genuinely clunky, and on a ONE-FIELD form it is
-   * clunky every single time: you type an address, go straight for the button,
-   * are told to complete the captcha, complete it — and then have to press the
-   * same button a second time, having already told the form exactly what you
-   * wanted. The second press is pure ceremony, and the point at which a reader
-   * who was mildly interested gives up.
-   *
-   * Done here, in the widget's own callback, rather than in an effect watching
-   * the token: this is a response to something that happened, not a state the
-   * component needs to settle into.
-   *
-   * `armed` is what makes it safe. It is set ONLY by a real click, so a token
-   * arriving on its own never submits anything, and it is cleared before the
-   * send — so the remount-on-failure below, which mints a fresh token, cannot
-   * bounce back through here into a loop.
-   */
-  const onCaptchaToken = (t: string | null) => {
-    setToken(t)
-    if (!t || !armed) return
-    setArmed(false)
-    setError(null)
-    void submitNow(t)
-  }
+    return false
+  })
 
   const send = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
     const invalid = validateSubscribe(email)
-    if (invalid) { setArmed(false); setError(invalid); return }
+    if (invalid) { captcha.disarm(); setError(invalid); return }
 
-    // Not an error — an instruction, and a promise that they will not have to
-    // come back to this button. Said in the neutral hint below rather than in
-    // red: being asked to prove you are human is not a mistake you made.
-    if (HCAPTCHA_SITE_KEY && !token) { setArmed(true); return }
-
-    void submitNow(token)
+    captcha.submit()
   }
 
   const frame = prominent
@@ -204,14 +161,14 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
           />
           <button
             type="submit"
-            disabled={sending || armed}
+            disabled={sending || captcha.armed}
             className="px-4 py-2 text-sm font-semibold rounded text-white cursor-pointer disabled:opacity-50 whitespace-nowrap"
             style={{ backgroundColor: COLORS.ink }}
           >
             {/* Three states, because two of them are waiting for different
                 things and a reader who cannot tell them apart presses the
                 button again. */}
-            {sending ? 'Signing you up…' : armed ? 'Waiting for the captcha…' : button}
+            {sending ? 'Signing you up…' : captcha.armed ? 'Waiting for the captcha…' : button}
           </button>
         </div>
 
@@ -229,13 +186,13 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
           />
         </div>
 
-        {engaged && <Captcha key={attempt} onToken={onCaptchaToken} />}
+        {engaged && <Captcha key={captcha.attempt} onToken={captcha.onToken} />}
 
         {/* Not red, and not an error: being asked to prove you are human is not
             a mistake the reader made. It also PROMISES the auto-submit, so the
             form finishing by itself a moment later reads as the thing that was
             described rather than as a surprise. */}
-        {armed && !error && (
+        {captcha.armed && !error && (
           <p className="text-sm m-0" style={{ color: COLORS.ink }} role="status">
             Just tick the box above — you will be signed up as soon as you do.
           </p>

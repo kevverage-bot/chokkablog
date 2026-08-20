@@ -9,6 +9,9 @@ import SUBSCRIBE_LIB from '../lib/subscribe.ts?raw'
 import SUBSCRIBE_HOOK from '../hooks/useSubscribe.ts?raw'
 import COMMENT_FORM from '../components/PostComments.tsx?raw'
 import COMMENT_HOOK from '../hooks/useComments.ts?raw'
+import FEEDBACK_FORM from '../components/FeedbackModal.tsx?raw'
+import SUBSCRIBE_FORM from '../components/SubscribeBox.tsx?raw'
+import CAPTCHA_HOOK from '../hooks/useCaptchaSubmit.ts?raw'
 import GUARD from '../../supabase/functions/_shared/guard.ts?raw'
 import { FEEDBACK_LIMITS, validateFeedback, isPlausibleEmail } from '../lib/feedback'
 import { COMMENT_LIMITS, validateComment } from '../lib/comments'
@@ -405,5 +408,60 @@ describe('validateSubscribe', () => {
   it('rejects an over-long one', () => {
     expect(validateSubscribe('a'.repeat(SUBSCRIBE_LIMITS.email) + '@example.com'))
       .toMatch(/too long/i)
+  })
+})
+
+
+/**
+ * ⚠ ALL THREE FORMS SHARE THE CAPTCHA RULE.
+ *
+ * The rule — a press with no token arms the form, solving it sends — is easy to
+ * re-implement badly in one form and leave the other two behind, and the symptom
+ * is not a crash: it is a reader saying what they want twice, or worse, a
+ * half-written comment posting itself when a token quietly renews. One copy, in
+ * hooks/useCaptchaSubmit.ts, for the same reason the Edge Functions share
+ * _shared/guard.ts.
+ */
+describe('the three public forms handle the captcha the same way', () => {
+  const forms: [string, string][] = [
+    ['the sign-up box', SUBSCRIBE_FORM],
+    ['the comment form', COMMENT_FORM],
+    ['the feedback form', FEEDBACK_FORM],
+  ]
+
+  for (const [name, source] of forms) {
+    it(`${name} uses the shared hook`, () => {
+      expect(codeOnly(source)).toContain('useCaptchaSubmit(')
+    })
+
+    it(`${name} does not keep its own token state`, () => {
+      // A form holding its own token has stopped using the shared rule, however
+      // much it still imports it. Matched on the setters rather than on the
+      // useState call — every form has a `useState<string | null>` for its error
+      // message, and asserting on that shape would fail for the wrong reason.
+      expect(codeOnly(source)).not.toMatch(/setToken\(/)
+      expect(codeOnly(source)).not.toMatch(/setAttempt\(/)
+    })
+
+    it(`${name} tells the reader it is waiting rather than scolding them`, () => {
+      // role=status, not role=alert: being asked to prove you are human is not
+      // a mistake the reader made.
+      expect(source).toMatch(/captcha\.armed && !error/)
+      expect(source).toMatch(/Waiting for the captcha/)
+    })
+  }
+
+  it('a token arriving unasked never submits anything', () => {
+    // hCaptcha re-verifies by itself when a token expires. Without the armed
+    // check that would post a comment somebody was still writing.
+    expect(codeOnly(CAPTCHA_HOOK)).toMatch(/if \(!t \|\| !armed\) return/)
+  })
+
+  it('a failed send disarms before it clears the token', () => {
+    // Clearing the token remounts the widget, which mints a fresh one. Still
+    // armed at that moment, the form would resubmit the request that has just
+    // failed, for as long as it kept failing.
+    const code = codeOnly(CAPTCHA_HOOK)
+    expect(code.indexOf('setArmed(false)')).toBeLessThan(code.indexOf('setToken(null)'))
   })
 })

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
 import { SubscribeSmallPrint } from './SubscribeBox'
-import { CAPTCHA_CONFIGURED, HCAPTCHA_SITE_KEY } from '../lib/captcha'
+import { CAPTCHA_CONFIGURED } from '../lib/captcha'
 import { useComments, threadComments, type PublicComment } from '../hooks/useComments'
+import { useCaptchaSubmit } from '../hooks/useCaptchaSubmit'
 import { validateComment, COMMENT_LIMITS } from '../lib/comments'
 import { useSubscribeContent } from '../hooks/useSubscribeContent'
 import { FALLBACK_SUBSCRIBE_CONTENT } from '../constants/subscribe'
@@ -126,9 +127,6 @@ function CommentForm({ postId, submit, onCancel }: {
   // under UK GDPR — it has to be a positive act. The reader is here to comment;
   // the mailing list is an offer, not a condition.
   const [wantsEmails, setWantsEmails] = useState(false)
-  const [token, setToken] = useState<string | null>(null)
-  /** Bumped to remount the captcha — see the note in components/Captcha.tsx. */
-  const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -147,14 +145,12 @@ function CommentForm({ postId, submit, onCancel }: {
   const openedAt = useRef(0)
   useEffect(() => { openedAt.current = Date.now() }, [])
 
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    const invalid = validateComment({ body, name, email })
-    if (invalid) { setError(invalid); return }
-    if (HCAPTCHA_SITE_KEY && !token) { setError('Please complete the captcha.'); return }
-
+  /** Pressing Post without a solved captcha ARMS the form; solving it then
+   *  posts. Shared with the other two public forms — see
+   *  hooks/useCaptchaSubmit.ts. ⚠ The rule that a token arriving on its own
+   *  never submits matters most HERE: hCaptcha re-verifies when one expires, and
+   *  a comment somebody is still writing must not be posted behind their back. */
+  const captcha = useCaptchaSubmit(async (token) => {
     setSending(true)
     const res = await submit({
       postId, body, name, email, token,
@@ -164,11 +160,19 @@ function CommentForm({ postId, submit, onCancel }: {
     })
     setSending(false)
 
-    if (res.ok) { setSubscribeFailed(res.subscribeFailed === true); setSent(true); return }
-    // A verified token cannot be replayed, so a retry needs a fresh one.
-    setToken(null)
-    setAttempt((a) => a + 1)
+    if (res.ok) { setSubscribeFailed(res.subscribeFailed === true); setSent(true); return true }
     setError(res.error ?? 'Could not post that — please try again.')
+    return false
+  })
+
+  const send = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    const invalid = validateComment({ body, name, email })
+    if (invalid) { captcha.disarm(); setError(invalid); return }
+
+    captcha.submit()
   }
 
   const inputCls = 'w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2'
@@ -291,7 +295,15 @@ function CommentForm({ postId, submit, onCancel }: {
         />
       </div>
 
-      <Captcha key={attempt} onToken={setToken} />
+      <Captcha key={captcha.attempt} onToken={captcha.onToken} />
+
+      {/* Neutral, not red, and it promises the post — so the form completing by
+          itself a moment later reads as the thing that was described. */}
+      {captcha.armed && !error && (
+        <p className="text-sm m-0" style={{ color: COLORS.ink }} role="status">
+          Just tick the box above — your comment will be posted as soon as you do.
+        </p>
+      )}
 
       {error && (
         <p className="text-sm m-0" style={{ color: COLORS.negative }} role="alert">{error}</p>
@@ -308,11 +320,11 @@ function CommentForm({ postId, submit, onCancel }: {
         </button>
         <button
           type="submit"
-          disabled={sending}
+          disabled={sending || captcha.armed}
           className="px-4 py-1.5 text-xs font-semibold rounded text-white cursor-pointer disabled:opacity-50"
           style={{ backgroundColor: COLORS.ink }}
         >
-          {sending ? 'Posting…' : 'Post comment'}
+          {sending ? 'Posting…' : captcha.armed ? 'Waiting for the captcha…' : 'Post comment'}
         </button>
       </div>
     </form>
