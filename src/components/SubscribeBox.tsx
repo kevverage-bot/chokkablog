@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
 import { RichText } from './RichText'
@@ -66,32 +66,81 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  /**
+   * They pressed the button before the captcha was solved, and are now solving
+   * it. See the auto-submit below.
+   */
+  const [armed, setArmed] = useState(false)
 
   const shownAt = useRef(0)
   useEffect(() => { shownAt.current = Date.now() }, [])
 
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-
-    const invalid = validateSubscribe(email)
-    if (invalid) { setError(invalid); return }
-    if (HCAPTCHA_SITE_KEY && !token) { setError('Please complete the captcha.'); return }
-
+  /**
+   * The submission itself, separated from the click.
+   *
+   * `useCallback` because the effect below calls it, and a fresh identity on
+   * every render would make that effect fire on every render too.
+   */
+  const submitNow = useCallback(async (captchaToken: string | null) => {
     setSending(true)
     const res = await subscribe({
       email,
-      token,
+      token: captchaToken,
       elapsedMs: Date.now() - shownAt.current,
       website,
     })
     setSending(false)
 
     if (res.ok) { setSent(true); return }
-    // A verified token cannot be replayed, so a retry needs a fresh one.
+    // A verified token cannot be replayed, so a retry needs a fresh one — and
+    // the remount mints one on its own. Disarmed first, or that fresh token
+    // would resubmit a request that has just failed, for ever.
+    setArmed(false)
     setToken(null)
     setAttempt((a) => a + 1)
     setError(res.error ?? 'Could not sign you up — please try again.')
+  }, [subscribe, email, website])
+
+  /**
+   * ⚠ SIGN THEM UP THE MOMENT THE CAPTCHA IS SOLVED, if they have already asked.
+   *
+   * Without this the form is genuinely clunky, and on a ONE-FIELD form it is
+   * clunky every single time: you type an address, go straight for the button,
+   * are told to complete the captcha, complete it — and then have to press the
+   * same button a second time, having already told the form exactly what you
+   * wanted. The second press is pure ceremony, and the point at which a reader
+   * who was mildly interested gives up.
+   *
+   * Done here, in the widget's own callback, rather than in an effect watching
+   * the token: this is a response to something that happened, not a state the
+   * component needs to settle into.
+   *
+   * `armed` is what makes it safe. It is set ONLY by a real click, so a token
+   * arriving on its own never submits anything, and it is cleared before the
+   * send — so the remount-on-failure below, which mints a fresh token, cannot
+   * bounce back through here into a loop.
+   */
+  const onCaptchaToken = (t: string | null) => {
+    setToken(t)
+    if (!t || !armed) return
+    setArmed(false)
+    setError(null)
+    void submitNow(t)
+  }
+
+  const send = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    const invalid = validateSubscribe(email)
+    if (invalid) { setArmed(false); setError(invalid); return }
+
+    // Not an error — an instruction, and a promise that they will not have to
+    // come back to this button. Said in the neutral hint below rather than in
+    // red: being asked to prove you are human is not a mistake you made.
+    if (HCAPTCHA_SITE_KEY && !token) { setArmed(true); return }
+
+    void submitNow(token)
   }
 
   const frame = prominent
@@ -155,11 +204,14 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
           />
           <button
             type="submit"
-            disabled={sending}
+            disabled={sending || armed}
             className="px-4 py-2 text-sm font-semibold rounded text-white cursor-pointer disabled:opacity-50 whitespace-nowrap"
             style={{ backgroundColor: COLORS.ink }}
           >
-            {sending ? 'Signing you up…' : button}
+            {/* Three states, because two of them are waiting for different
+                things and a reader who cannot tell them apart presses the
+                button again. */}
+            {sending ? 'Signing you up…' : armed ? 'Waiting for the captcha…' : button}
           </button>
         </div>
 
@@ -177,7 +229,17 @@ function SubscribeForm({ prominent }: { prominent: boolean }) {
           />
         </div>
 
-        {engaged && <Captcha key={attempt} onToken={setToken} />}
+        {engaged && <Captcha key={attempt} onToken={onCaptchaToken} />}
+
+        {/* Not red, and not an error: being asked to prove you are human is not
+            a mistake the reader made. It also PROMISES the auto-submit, so the
+            form finishing by itself a moment later reads as the thing that was
+            described rather than as a surprise. */}
+        {armed && !error && (
+          <p className="text-sm m-0" style={{ color: COLORS.ink }} role="status">
+            Just tick the box above — you will be signed up as soon as you do.
+          </p>
+        )}
 
         {error && (
           <p className="text-sm m-0" style={{ color: COLORS.negative }} role="alert">{error}</p>
