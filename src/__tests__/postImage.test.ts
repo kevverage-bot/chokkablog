@@ -39,6 +39,15 @@ describe('splitImageText', () => {
 })
 
 describe('stripMarkdown, for excerpts and meta descriptions', () => {
+  it('drops a thematic break rather than leaving hyphens in the description', () => {
+    // ⚠ `---` is not caught by the bullet rule (that needs a space after the
+    // dash) nor by the emphasis strip (that only removes * _ `), so without a
+    // rule of its own it survives into a meta description as three hyphens.
+    expect(stripMarkdown('Before.\n\n---\n\nAfter.')).toBe('Before. After.')
+    expect(stripMarkdown('Before.\n\n* * *\n\nAfter.')).toBe('Before. After.')
+    expect(stripMarkdown('Before.\n\n___\n\nAfter.')).toBe('Before. After.')
+  })
+
   it('drops an embed that is alone on a line', () => {
     expect(stripMarkdown('Before.\n\n@[Chart](https://gers-explorer.com/embed/charts/x)\n\nAfter.'))
       .toBe('Before. After.')

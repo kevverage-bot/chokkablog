@@ -127,3 +127,63 @@ describe('ordinary formatting still works', () => {
     expect(int.getAttribute('target')).toBeNull()
   })
 })
+
+
+/**
+ * The thematic break.
+ *
+ * ⚠ THE TRAP IT HAS TO AVOID: `***` is also the bold-italic marker, so a bare
+ * one is ambiguous and must be settled at the BLOCK level, before the inline
+ * pass ever sees the line. Get that order wrong and the break renders as three
+ * literal asterisks in a paragraph — which is exactly what an author was doing
+ * by hand before this existed, and so looks almost right.
+ */
+describe('thematic breaks', () => {
+  const breakCount = (md: string) => {
+    const { container } = render(<RichText text={md} id="t" />)
+    return container.querySelectorAll('[role="separator"]').length
+  }
+
+  it('accepts all three of Markdown\'s spellings', () => {
+    for (const marker of ['---', '***', '___']) {
+      expect(breakCount(`Before.\n\n${marker}\n\nAfter.`)).toBe(1)
+    }
+  })
+
+  it('accepts the spaced form, which is what people type by hand', () => {
+    expect(breakCount('Before.\n\n* * *\n\nAfter.')).toBe(1)
+    expect(breakCount('Before.\n\n- - -\n\nAfter.')).toBe(1)
+  })
+
+  it('keeps the paragraphs either side of it', () => {
+    const { container } = render(<RichText text={'Before.\n\n---\n\nAfter.'} id="t" />)
+    expect(container.textContent).toContain('Before.')
+    expect(container.textContent).toContain('After.')
+    // The marker itself must not survive as text.
+    expect(container.textContent).not.toContain('---')
+  })
+
+  it('does not read a bullet list as a break', () => {
+    // "- item" has a space after the dash and is a list, not a break.
+    expect(breakCount('- one\n- two\n- three')).toBe(0)
+  })
+
+  it('does not read bold-italic as a break', () => {
+    const { container } = render(<RichText text={'***emphatic***'} id="t" />)
+    expect(container.querySelectorAll('[role="separator"]').length).toBe(0)
+    expect(container.textContent).toBe('emphatic')
+  })
+
+  it('leaves two hyphens alone', () => {
+    // An em dash typed as "--" mid-sentence, and a line of only two.
+    expect(breakCount('Before.\n\n--\n\nAfter.')).toBe(0)
+  })
+
+  it('hides the asterisks from assistive technology', () => {
+    // The separator carries the meaning; read aloud, the glyph is three
+    // unexplained asterisks in the middle of a page of sentences.
+    const { container } = render(<RichText text={'a\n\n---\n\nb'} id="t" />)
+    const sep = container.querySelector('[role="separator"]')!
+    expect(sep.querySelector('[aria-hidden="true"]')).toBeTruthy()
+  })
+})

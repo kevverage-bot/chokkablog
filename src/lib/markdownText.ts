@@ -33,6 +33,11 @@ export function stripMarkdown(md: string): string {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     // The one inline tag we allow (underline).
     .replace(/<\/?[a-z][^>]*>/gi, '')
+    // ⚠ A thematic break is a beat, not words — drop the whole line. Without
+    // this `---` survives into an excerpt and a meta description as three
+    // hyphens, and it has to come BEFORE the list-bullet rule below: a spaced
+    // `- - -` would otherwise be eaten one bullet at a time.
+    .replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, ' ')
     // Block markers at line starts: headings, quotes, list bullets.
     .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
     .replace(/^[ \t]*>[ \t]?/gm, '')

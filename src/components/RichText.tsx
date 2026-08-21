@@ -40,12 +40,52 @@ import { EmbedFrame } from './EmbedFrame'
  *   @[title](url)            an interactive chart from one of the tool sites,
  *                            embedded in an iframe.
  *
+ * And a thematic break — `---`, `***` or `___` alone on a line — which renders
+ * as a centred dinkus rather than a rule across the column. See the note where
+ * it is rendered for why it is drawn that way.
+ *
  * On a line of its own each becomes a block — a <figure>, or a framed embed —
  * with the width of the text. A picture written mid-sentence renders as a plain
  * inline <img> instead, because a <figure> is not valid inside a <p>. An embed
  * written mid-sentence cannot be an iframe there, so it degrades to an ordinary
  * link to the chart — which is what a reader wanted from it anyway.
  */
+
+/**
+ * A beat between two parts of an argument — a dinkus, not a rule.
+ *
+ * ⚠ WHY THREE ASTERISKS RATHER THAN A LINE ACROSS THE COLUMN. A full-width rule
+ * reads as "new section", which is what a `#` heading is already for. This is
+ * the older book convention for a break WITHIN a piece: the argument turns, but
+ * it is still one argument. On a page whose only ornament is a single coral
+ * accent, a rule would also be the heaviest thing on it.
+ *
+ * ⚠ role="separator" on the wrapper, glyph hidden from assistive technology.
+ * The element carries the meaning; the asterisks are decoration, and read aloud
+ * they are three unexplained asterisks in the middle of a sentence-shaped page.
+ *
+ * The negative right margin cancels the trailing letter-space. `letter-spacing`
+ * adds its gap AFTER the last character too, so without this the run sits
+ * fractionally left of centre — the sort of thing nobody names and everybody
+ * sees. (`text-indent` would be the other way to do it, but it applies to block
+ * containers, not to this span.)
+ */
+function ThematicBreak() {
+  return (
+    <div
+      role="separator"
+      aria-orientation="horizontal"
+      className="my-10 text-center select-none"
+    >
+      <span
+        aria-hidden="true"
+        style={{ color: COLORS.accent, letterSpacing: '0.75em', marginRight: '-0.75em' }}
+      >
+        ***
+      </span>
+    </div>
+  )
+}
 
 /** One point in a list, with any sub-points hanging off it. The parser only ever
  *  fills one level of `sub` — a post wanting a third level is a post wanting
@@ -68,6 +108,8 @@ type Block =
   | { kind: 'figure'; url: string; alt: string; caption: string | null }
   /** An embedded chart on a line of its own. */
   | { kind: 'embed'; url: string; title: string }
+  /** A thematic break — a beat between two parts of an argument. */
+  | { kind: 'break' }
 
 interface Parsed {
   blocks: Block[]
@@ -82,6 +124,14 @@ const FOOTNOTE_DEF_RE = /^\[\^([^\]\s]+)\]:\s?(.*)$/
 // falls through to the inline handling instead.
 const IMAGE_BLOCK_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/
 const EMBED_BLOCK_RE = /^@\[([^\]]*)\]\(([^)\s]+)\)$/
+
+/**
+ * A thematic break: three or more of `-`, `*` or `_` alone on a line, spaces
+ * allowed between them. CommonMark's rule, so `---`, `***`, `___` and `* * *`
+ * all work — an author should not have to remember which spelling this renderer
+ * happened to pick.
+ */
+const THEMATIC_BREAK_RE = /^(?:\s*[-*_]){3,}\s*$/
 
 
 // Source for the inline-token regex. A fresh RegExp is built per render pass
@@ -195,6 +245,20 @@ function parse(src: string): Parsed {
     if (embedBlock && isSafeUrl(embedBlock[2])) {
       flushPara(); flushList(); flushQuote()
       blocks.push({ kind: 'embed', url: embedBlock[2], title: embedBlock[1].trim() || 'Embedded chart' })
+      continue
+    }
+
+    // A thematic break. All three of Markdown's spellings, because they are all
+    // standard and an author should not have to remember which one this
+    // renderer chose — `***` in particular is what somebody reaches for who has
+    // been centring asterisks by hand in another editor.
+    //
+    // ⚠ Checked BEFORE the inline pass ever sees the line: `***` is also the
+    // bold-italic marker, and a bare one would otherwise sit in a paragraph as
+    // three literal asterisks.
+    if (THEMATIC_BREAK_RE.test(trimmed)) {
+      flushPara(); flushList(); flushQuote()
+      blocks.push({ kind: 'break' })
       continue
     }
 
@@ -674,6 +738,7 @@ export function RichText({ text, id: idProp, hideFootnotes, highlight }: RichTex
             </div>
           )
         }
+        if (b.kind === 'break') return <ThematicBreak key={i} />
         return <List key={i} items={b.items} ordered={b.kind === 'ol'} ctx={ctx} keyBase={`b${i}`} />
       })}
       {!hideFootnotes && <FootnoteList footnotes={parsed.footnotes} ctx={ctx} id={id} />}

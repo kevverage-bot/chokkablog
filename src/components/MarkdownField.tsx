@@ -175,6 +175,20 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
     insertBlock(`@[Chart](${url})`, 2, 5)
   }
 
+  /**
+   * A beat between two parts of an argument, on a line of its own.
+   *
+   * `---` rather than `***`, though the renderer takes both: three hyphens are
+   * unambiguous in the editor, where `***` also starts bold-italic and reads as
+   * an unfinished one.
+   */
+  const insertBreak = () => {
+    setToolError(null)
+    // Caret left after the marker, with nothing selected: the next thing the
+    // author does is start the paragraph below it.
+    insertBlock('---', 3, 0)
+  }
+
   const pickImage = () => {
     setToolError(null)
     fileRef.current?.click()
@@ -272,6 +286,13 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
           Footnote
         </ToolButton>
         <ToolButton disabled={preview} onClick={insertNote} title="Click-to-reveal note — an inline tooltip">Note</ToolButton>
+        <ToolButton
+          disabled={preview}
+          onClick={insertBreak}
+          title="A break between two parts of a post — renders as a centred * * *, not a rule across the column"
+        >
+          Break
+        </ToolButton>
         <ToolButton
           disabled={preview || uploading}
           onClick={pickImage}

@@ -48,6 +48,11 @@ export function stripMarkdown(md) {
     })
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/<\/?[a-z][^>]*>/gi, '')
+    // ⚠ A thematic break is a beat, not words — drop the whole line. Without
+    // this `---` survives into an excerpt and a meta description as three
+    // hyphens, and it has to come BEFORE the list-bullet rule below: a spaced
+    // `- - -` would otherwise be eaten one bullet at a time.
+    .replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, ' ')
     .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
     .replace(/^[ \t]*>[ \t]?/gm, '')
     .replace(/^[ \t]*(?:[-*+]|\d+\.)[ \t]+/gm, '')
@@ -212,6 +217,15 @@ export function markdownToHtml(md, opts = {}) {
       if (SAFE_HREF.test(chart[2])) {
         out.push(`<p><a href="${escapeHtml(chart[2])}">${inline(chart[1]) || 'Chart'}</a></p>`)
       }
+      continue
+    }
+
+    // A thematic break. ⚠ Before the list rule, or a spaced `* * *` is read as
+    // a bullet; and before `inline()` ever sees it, or `***` is bold-italic.
+    // Twin of THEMATIC_BREAK_RE in src/components/RichText.tsx.
+    if (/^(?:\s*[-*_]){3,}\s*$/.test(line)) {
+      flushPara(); flushList(); flushQuote()
+      out.push('<hr />')
       continue
     }
 
