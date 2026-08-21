@@ -3,6 +3,7 @@ import { COLORS } from '../constants/colors'
 import { RichText } from './RichText'
 import { uploadPostImage, imageAtCaret, toggleOutline } from '../lib/postImage'
 import { extractEmbedUrl, isUsableEmbedUrl } from '../lib/embedUrl'
+import { fitToContent } from '../lib/autoGrow'
 
 interface Props {
   value: string
@@ -48,8 +49,10 @@ export function MarkdownField({ value, onChange, placeholder, minHeight = 120, s
       ta.setSelectionRange(s, e)
       pendingSel.current = null
     }
-    ta.style.height = 'auto'
-    ta.style.height = `${Math.max(ta.scrollHeight, minHeight)}px`
+    // ⚠ This also PUTS THE SCROLL POSITION BACK, which is not incidental:
+    // measuring the content requires collapsing the box, and collapsing it on a
+    // long draft makes the browser clamp the page's scroll. See lib/autoGrow.
+    fitToContent(ta, minHeight, window)
   }, [value, preview, minHeight])
 
   const surround = (before: string, after: string, ph: string) => {
