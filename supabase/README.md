@@ -128,16 +128,40 @@ Three Edge Functions, in `functions/`, are the only way a stranger's words reach
 this database: `submit-feedback` (the footer form), `submit-comment` (beneath a
 post) and `subscribe` (the sign-up box at the foot of a post). They share
 `functions/_shared/guard.ts` — honeypot → time-on-form → captcha → rate limit, in
-that order, so a script that cannot pass the captcha never costs a query.
+that order, so a script that cannot pass the captcha never costs a query. (The
+captcha step is currently switched off — see below.)
 
-**Both fail closed.** With no `HCAPTCHA_SECRET` set, the guard refuses every
-write with a 503, because an unprotected public insert is the worse failure. The
-app matches that: with no `VITE_HCAPTCHA_SITE_KEY` it does not render the forms at
-all rather than throwing away what somebody typed into one
-(`src/lib/captcha.ts`). **So until hCaptcha is configured, there are no forms on
-the site** — which is the intended state, not a bug.
+### ⚠ The captcha is currently OFF
 
-### Turning it on
+`CAPTCHA_ON = false`, in two places: `functions/_shared/guard.ts` and
+`src/lib/captcha.ts`. The forms send nothing to hCaptcha and the guard asks for
+nothing. The judgement behind it is in the comment at the top of
+`src/lib/captcha.ts`: an unread blog's problem is silence, not spam, and a widget
+in front of a one-field sign-up costs more real readers than it stops bots.
+
+Still guarding the endpoints meanwhile: the honeypot, the two-second floor, and
+both rate limits — per sender and site-wide, per hour. Gone is the only check a
+determined script cannot read the source and satisfy.
+
+**To turn it back on, in this order:**
+
+1. `CAPTCHA_ON = true` in `functions/_shared/guard.ts`, then deploy all three
+   functions (they each bundle their own copy of the shared file).
+2. `CAPTCHA_ON = true` in `src/lib/captcha.ts`, then push.
+
+That order, because a browser sending no token to a server that demands one is a
+form that silently fails for every reader; the other way round is only a widget
+nobody is checking. `src/__tests__/publicWrite.test.ts` fails while the two
+disagree, so a half-done flip cannot ship quietly — but it cannot tell you which
+half, hence the order. Both need the keys below to be in place.
+
+**With the captcha on, both halves fail closed.** With no `HCAPTCHA_SECRET` set,
+the guard refuses every write with a 503, because an unprotected public insert is
+the worse failure. The app matches that: with no `VITE_HCAPTCHA_SITE_KEY` it does
+not render the forms at all rather than throwing away what somebody typed into
+one (`src/lib/captcha.ts`).
+
+### Configuring the keys
 
 1. Create a site at [hcaptcha.com](https://dashboard.hcaptcha.com) for
    `chokkablog.com`. It gives you a **site key** (public) and a **secret**.
@@ -163,11 +187,13 @@ the site** — which is the intended state, not a bug.
    ```bash
    npx supabase functions deploy submit-feedback
    npx supabase functions deploy submit-comment
+   npx supabase functions deploy subscribe
    ```
 
    `_shared/` is bundled into each automatically. **A change to `guard.ts` needs
-   both redeployed** — that is the one thing about sharing a file this way that
-   will catch you out.
+   all three redeployed** — that is the one thing about sharing a file this way
+   that will catch you out. Deploying two of them leaves the third running last
+   month's rules, which is invisible until the one form nobody tested misbehaves.
 
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by the platform; do
 not set them, and never put the service-role key in this repo or in any `VITE_`

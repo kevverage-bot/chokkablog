@@ -25,6 +25,20 @@ export function json(payload: any, status = 200) {
   })
 }
 
+/**
+ * The captcha switch. ⚠ CURRENTLY OFF — see the long note in src/lib/captcha.ts
+ * for why, for what is still guarding these endpoints without it (honeypot,
+ * time-on-form, and both rate limits), and for the order to turn it back on in:
+ * this file and a function deploy FIRST, the browser second.
+ *
+ * A constant rather than an env var, deliberately. The switch is a decision
+ * about the site, so it belongs in the history beside the reasoning, and it is
+ * the same flip in both halves — `CAPTCHA_ON = true`, twice. An env var would
+ * put half of it in a dashboard where nothing records who turned it off or when.
+ * src/__tests__/publicWrite.test.ts fails while the two halves disagree.
+ */
+const CAPTCHA_ON = false
+
 /** Below this, a "human" filled in the form in under two seconds. Mirrored by
  *  FEEDBACK_LIMITS.minElapsedMs in src/lib/feedback.ts. */
 export const MIN_ELAPSED_MS = 2000
@@ -43,7 +57,8 @@ export function adminClient(): SupabaseClient {
  *
  * ORDER MATTERS: the free local checks run before the network call to hCaptcha,
  * and the captcha runs before the database is touched at all. A script that
- * cannot pass step 3 never costs a query.
+ * cannot pass step 3 never costs a query. That ordering is kept while the
+ * captcha is off, so switching it back on changes nothing else.
  */
 export async function guard(
   req: Request,
@@ -63,26 +78,35 @@ export async function guard(
     return { blocked: json({ error: 'That was quick — give it another go.' }, 400) }
   }
 
-  // 3. Captcha. FAILS CLOSED: an unset secret would mean an open endpoint, and a
-  //    broken form is much the better failure. This is the only check here that
-  //    a determined script cannot simply read and satisfy.
-  const secret = Deno.env.get('HCAPTCHA_SECRET')
-  if (!secret) {
-    console.error('HCAPTCHA_SECRET is not set — refusing the write')
-    return { blocked: json({ error: 'Not configured yet. Please try again later.' }, 503) }
-  }
-  const token = String(body.token ?? '')
-  if (!token) return { blocked: json({ error: 'Please complete the captcha.' }, 400) }
+  // 3. Captcha, when it is switched on. Skipped entirely when it is not — NOT
+  //    "verified if a token happens to be there", because a browser that sends
+  //    no token and a browser sending a stale one must reach the same place, and
+  //    the rate limits below are what is doing the work either way.
+  //
+  //    Whole and untouched inside this branch so that turning it back on is one
+  //    word rather than a reconstruction.
+  if (CAPTCHA_ON) {
+    // FAILS CLOSED: an unset secret would mean an open endpoint, and a broken
+    // form is much the better failure. This is the only check here that a
+    // determined script cannot simply read and satisfy.
+    const secret = Deno.env.get('HCAPTCHA_SECRET')
+    if (!secret) {
+      console.error('HCAPTCHA_SECRET is not set — refusing the write')
+      return { blocked: json({ error: 'Not configured yet. Please try again later.' }, 503) }
+    }
+    const token = String(body.token ?? '')
+    if (!token) return { blocked: json({ error: 'Please complete the captcha.' }, 400) }
 
-  const verifyRes = await fetch('https://api.hcaptcha.com/siteverify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ secret, response: token }),
-  })
-  const verify = await verifyRes.json().catch(() => ({ success: false }))
-  if (!verify.success) {
-    console.warn('hCaptcha rejected a submission:', verify['error-codes'])
-    return { blocked: json({ error: 'Captcha failed — please try again.' }, 400) }
+    const verifyRes = await fetch('https://api.hcaptcha.com/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: token }),
+    })
+    const verify = await verifyRes.json().catch(() => ({ success: false }))
+    if (!verify.success) {
+      console.warn('hCaptcha rejected a submission:', verify['error-codes'])
+      return { blocked: json({ error: 'Captcha failed — please try again.' }, 400) }
+    }
   }
 
   // 4. Rate limit, on a SALTED hash of the address. The salt defaults to the

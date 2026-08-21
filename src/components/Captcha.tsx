@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { COLORS } from '../constants/colors'
-import { HCAPTCHA_SITE_KEY } from '../lib/captcha'
+import { CAPTCHA_ACTIVE, HCAPTCHA_SITE_KEY } from '../lib/captcha'
 
 /**
  * Split out of the main bundle. The widget is ~10 kB gzipped of third-party
@@ -18,7 +18,9 @@ const HCaptcha = lazy(() => import('@hcaptcha/react-hcaptcha'))
  * up half-applied. Both forms do that with an attempt counter.
  */
 export function Captcha({ onToken }: { onToken: (token: string | null) => void }) {
-  if (!HCAPTCHA_SITE_KEY) return null
+  // Nothing at all when the captcha is switched off, or when there is no key to
+  // render it with. Every form treats a null here as "send straight away".
+  if (!CAPTCHA_ACTIVE) return null
   return (
     <div className="flex justify-center">
       <Suspense

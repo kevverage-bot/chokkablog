@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { COLORS } from '../constants/colors'
-import { CAPTCHA_CONFIGURED } from '../lib/captcha'
+import { FORMS_AVAILABLE } from '../lib/captcha'
 
 /**
  * Split out of the main bundle: the form and its captcha are only ever needed by
@@ -26,10 +26,11 @@ export function SiteFooter() {
     <footer className="text-center mt-16 mb-6">
       <p className="text-xs flex items-center justify-center gap-3" style={{ color: COLORS.faint }}>
         <span>chokkablog.com</span>
-        {/* Hidden rather than shown-and-broken when there is no captcha: the Edge
-            Function refuses the write without one, so the form could only throw
-            away what somebody wrote. See lib/captcha.ts. */}
-        {CAPTCHA_CONFIGURED && (
+        {/* Hidden rather than shown-and-broken when the write path cannot work:
+            a captcha switched on with no site key to render it with means the
+            Edge Function refuses, and the form could only throw away what
+            somebody wrote. See lib/captcha.ts. */}
+        {FORMS_AVAILABLE && (
           <>
             <span aria-hidden="true">·</span>
             <button

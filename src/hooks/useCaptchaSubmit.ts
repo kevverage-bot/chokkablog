@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HCAPTCHA_SITE_KEY } from '../lib/captcha'
+import { CAPTCHA_ACTIVE } from '../lib/captcha'
 
 /**
  * The captcha half of a public form, shared by all three of them.
@@ -68,7 +68,10 @@ export function useCaptchaSubmit(
    * say so, or 'sending' when the send is under way.
    */
   const submit = (): 'armed' | 'sending' => {
-    if (HCAPTCHA_SITE_KEY && !token) { setArmed(true); return 'armed' }
+    // With the captcha off there is nothing to wait for, so the press sends —
+    // the form never arms, and every "waiting for the captcha" state below stays
+    // dead code rather than needing to be unpicked from three forms.
+    if (CAPTCHA_ACTIVE && !token) { setArmed(true); return 'armed' }
     void run(token)
     return 'sending'
   }

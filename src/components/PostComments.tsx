@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
 import { SubscribeSmallPrint } from './SubscribeBox'
-import { CAPTCHA_CONFIGURED } from '../lib/captcha'
+import { FORMS_AVAILABLE } from '../lib/captcha'
 import { useComments, threadComments, type PublicComment } from '../hooks/useComments'
 import { useCaptchaSubmit } from '../hooks/useCaptchaSubmit'
 import { validateComment, COMMENT_LIMITS } from '../lib/comments'
@@ -58,10 +58,10 @@ export function PostComments({ postId }: { postId: string }) {
         ))}
       </ul>
 
-      {!CAPTCHA_CONFIGURED ? (
-        // The write path cannot work without a captcha (the Edge Function refuses
-        // the insert), so offering a form here would only waste what somebody
-        // wrote in it.
+      {!FORMS_AVAILABLE ? (
+        // Only reachable with the captcha switched on and no site key to render
+        // it with — the Edge Function would refuse the insert, so offering a form
+        // here would waste what somebody wrote in it.
         <p className="text-sm m-0" style={{ color: COLORS.faint }}>
           Comments are not open yet.
         </p>

@@ -13,6 +13,7 @@ import FEEDBACK_FORM from '../components/FeedbackModal.tsx?raw'
 import SUBSCRIBE_FORM from '../components/SubscribeBox.tsx?raw'
 import CAPTCHA_HOOK from '../hooks/useCaptchaSubmit.ts?raw'
 import GUARD from '../../supabase/functions/_shared/guard.ts?raw'
+import CAPTCHA_LIB from '../lib/captcha.ts?raw'
 import { FEEDBACK_LIMITS, validateFeedback, isPlausibleEmail } from '../lib/feedback'
 import { COMMENT_LIMITS, validateComment } from '../lib/comments'
 import { SUBSCRIBE_LIMITS, validateSubscribe, handOverToKit, KIT_FORM_URL } from '../lib/subscribe'
@@ -113,6 +114,58 @@ describe('the guard keeps the properties the tables depend on', () => {
 
   it('answers the honeypot with a 200, so a bot learns nothing', () => {
     expect(GUARD).toMatch(/body\.website[\s\S]{0,80}json\(\{ ok: true \}\)/)
+  })
+})
+
+describe('the captcha switch is one decision, not two', () => {
+  /**
+   * The switch lives twice — once in the browser, once in the deployed guard —
+   * because the two halves ship by different routes and cannot share a module.
+   * Flipped in one place only, the site either shows a widget nobody checks (the
+   * harmless direction) or sends no token to a server that demands one, which is
+   * a sign-up form that silently fails for every reader. This is what stops the
+   * half-done flip.
+   */
+  const flagIn = (src: string) => {
+    const m = src.match(/CAPTCHA_ON(?:\s*:\s*boolean)?\s*=\s*(true|false)/)
+    expect(m, 'CAPTCHA_ON is missing — do not rename it without updating this test').toBeTruthy()
+    return m![1] === 'true'
+  }
+
+  it('the browser and the Edge Function agree on whether it is on', () => {
+    expect(flagIn(CAPTCHA_LIB)).toBe(flagIn(GUARD))
+  })
+
+  it('the guard skips the verify entirely when it is off, rather than half-checking', () => {
+    // A token that happens to arrive must not be verified while the switch is
+    // off: readers on a cached bundle would then be held to a rule the rest are
+    // not, and the failure is invisible from here.
+    expect(GUARD).toMatch(/if \(CAPTCHA_ON\) \{[\s\S]*siteverify/)
+  })
+
+  it('what is left when it is off is still the honeypot, the delay and both rate limits', () => {
+    // The captcha is the only check being switched. If one of these ever ends up
+    // inside the `if (CAPTCHA_ON)` block by accident, turning the captcha off
+    // would quietly open the endpoint.
+    const guardBody = GUARD.slice(GUARD.indexOf('export async function guard'))
+    const off = guardBody.slice(0, guardBody.indexOf('if (CAPTCHA_ON)'))
+      + guardBody.slice(guardBody.indexOf('// 4. Rate limit'))
+    expect(off).toContain('body.website')
+    expect(off).toContain('MIN_ELAPSED_MS')
+    expect(off).toContain('perSenderPerHour')
+    expect(off).toContain('sitePerHour')
+  })
+
+  it('the forms are offered whenever the write path can work', () => {
+    // With no captcha to configure, a missing site key stops being a reason to
+    // hide a sign-up box that would work perfectly well.
+    expect(CAPTCHA_LIB).toMatch(/FORMS_AVAILABLE[\s\S]{0,40}!CAPTCHA_ON \|\| CAPTCHA_ACTIVE/)
+  })
+
+  it('a press sends immediately when there is no captcha to wait for', () => {
+    // Otherwise the form arms and waits for a token that is never coming, and
+    // the button sits on "Waiting for the captcha…" for ever.
+    expect(CAPTCHA_HOOK).toMatch(/if \(CAPTCHA_ACTIVE && !token\) \{ setArmed\(true\)/)
   })
 })
 

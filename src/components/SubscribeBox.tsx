@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { COLORS } from '../constants/colors'
 import { Captcha } from './Captcha'
 import { RichText } from './RichText'
-import { CAPTCHA_CONFIGURED } from '../lib/captcha'
+import { FORMS_AVAILABLE } from '../lib/captcha'
 import { useSubscribe } from '../hooks/useSubscribe'
 import { useCaptchaSubmit } from '../hooks/useCaptchaSubmit'
 import { useSubscribeContent } from '../hooks/useSubscribeContent'
@@ -39,11 +39,11 @@ export function SubscribeBox({ prominent = false }: {
   // where the box can never render. Splitting it means the read happens only
   // when there is something to read it for.
   //
-  // The write path cannot work without a captcha (the Edge Function refuses),
-  // so there is nothing to offer. Silent rather than apologetic: an absent
-  // sign-up box is unremarkable, where "sign-ups are not open" invites a reader
-  // to keep checking back for something that was never announced.
-  if (!CAPTCHA_CONFIGURED) return null
+  // Only when the write path can work at all — which, with the captcha off, is
+  // always. Silent rather than apologetic when it cannot: an absent sign-up box
+  // is unremarkable, where "sign-ups are not open" invites a reader to keep
+  // checking back for something that was never announced.
+  if (!FORMS_AVAILABLE) return null
   return <SubscribeForm prominent={prominent} />
 }
 

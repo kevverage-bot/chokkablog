@@ -42,6 +42,24 @@ vi.mock('../lib/supabase', () => {
   return { supabase: { from: () => chain, functions: { invoke: (...a: unknown[]) => invoke(...(a as [])) } } }
 })
 
+/**
+ * The captcha switch, made switchable for the tests.
+ *
+ * It is OFF on the live site (see src/lib/captcha.ts). The one-press rule below
+ * is not dead code because of that — it is the reason the box is worth having at
+ * all if the captcha ever goes back on, and it is exactly the sort of thing that
+ * gets quietly lost while nothing is exercising it. So the rule is tested with
+ * the switch forced on, and the shipping behaviour is tested with it off.
+ */
+let captchaOn = true
+vi.mock('../lib/captcha', () => ({
+  get CAPTCHA_ON() { return captchaOn },
+  get CAPTCHA_ACTIVE() { return captchaOn },
+  // The forms are offered either way — that is the whole point of the switch.
+  FORMS_AVAILABLE: true,
+  HCAPTCHA_SITE_KEY: 'a-test-site-key',
+}))
+
 vi.mock('../lib/subscribe', async (orig) => ({
   ...(await orig<typeof import('../lib/subscribe')>()),
   // Kit's handover is the browser's job now; it is covered by its own tests.
@@ -52,6 +70,7 @@ beforeEach(() => {
   wording = { data: null, error: { message: 'relation does not exist' } }
   invoke.mockClear()
   solveCaptcha = () => {}
+  captchaOn = true
 })
 
 describe('SubscribeBox', () => {
@@ -117,6 +136,55 @@ describe('SubscribeBox', () => {
 
     await userEvent.type(field, 'a')
     expect(await screen.findByRole('button', { name: 'I am human' })).toBeTruthy()
+  })
+})
+
+
+/**
+ * How the box actually behaves today: no captcha at all.
+ *
+ * ⚠ The reasoning is in src/lib/captcha.ts. What matters here is that switching
+ * it off did not leave the form waiting for a token that is never coming — the
+ * failure would be a button stuck on "Waiting for the captcha…", on the one form
+ * whose entire job is to be easy.
+ */
+describe('with the captcha switched off', () => {
+  beforeEach(() => { captchaOn = false })
+
+  it('signs them up on the first press, with no widget anywhere', async () => {
+    render(<SubscribeBox />)
+    await userEvent.type(await screen.findByLabelText(/email address/i), 'reader@example.com')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep me posted' }))
+
+    // No second press, and no pause on "Waiting for the captcha…" in between.
+    expect(await screen.findByText(/check your inbox/i)).toBeTruthy()
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/waiting for the captcha/i)).toBeNull()
+  })
+
+  it('sends a null token rather than pretending to have one', async () => {
+    // The Edge Function is not looking at it while the switch is off, and a
+    // fabricated token would be verified for real the moment it goes back on.
+    render(<SubscribeBox />)
+    await userEvent.type(await screen.findByLabelText(/email address/i), 'reader@example.com')
+    await userEvent.click(screen.getByRole('button', { name: 'Keep me posted' }))
+
+    await screen.findByText(/check your inbox/i)
+    const [, options] = invoke.mock.calls[0] as unknown as [string, { body: { token: unknown } }]
+    expect(options.body.token).toBeNull()
+  })
+
+  it('still refuses an address that is not one', async () => {
+    // The captcha was never what stopped a typo. Losing it must not lose this.
+    // `reader@localhost` deliberately: the field's own type=email accepts it, so
+    // this reaches OUR check rather than stopping at the browser's.
+    render(<SubscribeBox />)
+    await userEvent.type(await screen.findByLabelText(/email address/i), 'reader@localhost')
+    await userEvent.click(screen.getByRole('button', { name: 'Keep me posted' }))
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(invoke).not.toHaveBeenCalled()
   })
 })
 
