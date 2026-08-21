@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { COLORS, PREVIEW_OUTLINE } from '../constants/colors'
 import { Container } from '../components/Container'
 import { PageLoading } from '../components/PageLoading'
 import { RichText, RichTextFootnotes, InlineText } from '../components/RichText'
 import { PreviewBadge } from '../components/AdminPreview'
 import { PostComments } from '../components/PostComments'
+import { ShareMenu } from '../components/ShareMenu'
 import { SubscribeBox } from '../components/SubscribeBox'
 import { usePosts, type Post } from '../hooks/usePosts'
 import { formatPostDate, isoDate } from '../lib/dates'
 import { pathForPost, pathForPage, plainClick, searchTermFromUrl } from '../lib/routes'
-import { postTitle, useDocumentTitle } from '../lib/pageTitle'
+import { plainTitle, postTitle, useDocumentTitle } from '../lib/pageTitle'
 import { tokenize } from '../lib/search'
 
 /**
@@ -105,7 +106,14 @@ export function PostPage({ slug, onNavigate, onSelect }: {
             {date
               ? <time dateTime={isoDate(post.published_at)}>{date}</time>
               : <span>Draft — not published</span>}
-            <ShareButton slug={post.slug} />
+            {/* The canonical permalink, not window.location — a reader who
+                arrived from search has a `?q=` on their address bar for the
+                moment it takes the effect above to strip it, and that must
+                never be what gets sent to somebody else. */}
+            <ShareMenu
+              url={post.slug ? `${window.location.origin}${pathForPost(post.slug)}` : window.location.href}
+              title={plainTitle(post.headline)}
+            />
           </div>
         </header>
 
@@ -148,29 +156,6 @@ export function PostPage({ slug, onNavigate, onSelect }: {
         </nav>
       )}
     </Container>
-  )
-}
-
-function ShareButton({ slug }: { slug: string | null }) {
-  const [copied, setCopied] = useState(false)
-  const share = async () => {
-    const url = slug ? `${window.location.origin}${pathForPost(slug)}` : window.location.href
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch { /* clipboard blocked — no-op rather than an error the reader can't act on */ }
-  }
-  return (
-    <button
-      type="button"
-      onClick={share}
-      title="Copy a link to this post"
-      className="cursor-pointer bg-transparent border-none p-0 text-xs underline"
-      style={{ color: 'inherit', font: 'inherit' }}
-    >
-      {copied ? 'Link copied' : 'Share'}
-    </button>
   )
 }
 
